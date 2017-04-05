@@ -32,6 +32,7 @@ import json
 DATA_PATH = 'data'
 MODEL_PATH = 'model'
 BIN_PATH = 'build'
+EVAL_PATH = 'eval'
 SCRIPT_PATH = 'scripts'
 
 CONF_FNAME = 'config.json'
@@ -49,7 +50,7 @@ EVAL = os.path.join(SCRIPT_PATH, 'evaluate.py')
 
 
 class GloVe:
-    def __init__(self, num=None):
+    def __init__(self, argp, num=None):
         self.config = {}
         self.embeds_fpath = ''
         self.vocab_fpath = ''
@@ -58,6 +59,8 @@ class GloVe:
         self.eval_fpath = ''
         self.model_fpaths = ''
         self.all_fpaths = ''
+
+        self.argp = argp
 
         self.conf_fpath = os.path.join(SCRIPT_PATH, CONF_FNAME)
         self.load_config()
@@ -70,7 +73,7 @@ class GloVe:
     @staticmethod
     def get_fpath(path, fname, params):
         assert not isinstance(params, str)
-        suffix = '_'.join([''.join([str(prm) for prm in param_pair]) for param_pair in params])
+        suffix = '_'.join([join_list(param_pair, sep='') for param_pair in params])
         (basename, ext) = os.path.splitext(fname)
         new_basename = '{}_{}{}'.format(basename, suffix, ext)
         return os.path.join(path, new_basename)
@@ -92,49 +95,46 @@ class GloVe:
             model_params += [('num', num)]
 
         self.embeds_fpath = self.get_fpath(MODEL_PATH, EMBEDS_FNAME, model_params)
-        self.vocab_fpath = self.get_fpath(MODEL_PATH, VOCAB_FNAME, vocab_params)
+        self.vocab_fpath = self.get_fpath(DATA_PATH, VOCAB_FNAME, vocab_params)
         self.cooccur_fpath = self.get_fpath(DATA_PATH, COOCCURR_FNAME, data_params)
         self.shuf_cooc_fpath = self.get_fpath(DATA_PATH, SHUF_COOC_FNAME, data_params)
-        self.eval_fpath = self.get_fpath(DATA_PATH, EVAL_FNAME, model_params)
+        self.eval_fpath = self.get_fpath(EVAL_PATH, EVAL_FNAME, model_params)
 
         # self.model_fpaths = [self.embeds_bin_fpath, self.embeds_txt_fpath]
         # self.all_fpaths = self.model_fpaths + \
         #     [self.vocab_fpath, self.cooccur_fpath, self.shuf_cooc_fpath, self.eval_fpath]
 
     @staticmethod
-    def run_command(command, name=None):
-        print(' '.join([str(el) for el in command]))
-        # subprocess.run(command)
+    def run_command(command, name=None, stdin=None, stdout=None):
+        print(join_list(command))
+        subprocess.run(command, stdin=stdin, stdout=stdout)
         if name is None:
             name = command[0]
-        print("'{}' done.".format(name))
+        print("'{}' done.\n".format(name))
 
     def build_vocab(self):
         command = [VOCAB_COUNT,
                    '-min-count', self.config['voc_min_cnt'],
-                   '-verbose', self.config['verbose'],
-                   '<', self.config['corpus_fpath'],
-                   '>', self.vocab_fpath]
-        self.run_command(command)
+                   '-verbose', self.config['verbose']]
+        with open(self.argp.corpus_fpath, 'r') as f_in, open(self.vocab_fpath, 'w') as f_out:
+            self.run_command(lst_el2str(command), stdin=f_in, stdout=f_out)
 
     def build_cooccurr(self):
         command = [COOCCUR,
                    '-memory', self.config['memory'],
                    '-vocab', self.vocab_fpath,
                    '-verbose', self.config['verbose'],
-                   '-window-size', self.config['win_size'],
-                   '<', self.config['corpus_fpath'],
-                   '>', self.cooccur_fpath]
-        self.run_command(command)
+                   '-window-size', self.config['win_size']]
+        with open(self.argp.corpus_fpath) as f_in, open(self.cooccur_fpath, 'w') as f_out:
+            self.run_command(lst_el2str(command), stdin=f_in, stdout=f_out)
 
     def build_shuf_cooc(self):
         command = [SHUFFLE,
                    '-memory', self.config['memory'],
                    '-verbose', self.config['verbose'],
-                   '-window-size', self.config['win_size'],
-                   '<', self.cooccur_fpath,
-                   '>', self.shuf_cooc_fpath]
-        self.run_command(command)
+                   '-window-size', self.config['win_size']]
+        with open(self.cooccur_fpath) as f_in, open(self.shuf_cooc_fpath, 'w') as f_out:
+            self.run_command(lst_el2str(command), stdin=f_in, stdout=f_out)
 
     def train(self):
         command = [GLOVE,
@@ -147,18 +147,18 @@ class GloVe:
                    '-binary', self.config['binary'],
                    '-vocab-file', self.vocab_fpath,
                    '-verbose', self.config['verbose']]
-        self.run_command(command)
+        self.run_command(lst_el2str(command))
 
     def eval(self):
         command = ['python', EVAL,
                    '--vocab_file', self.vocab_fpath,
-                   '--vectors_file', self.embeds_fpath+'.txt',
-                   '>>', self.eval_fpath]
-        command_str = ' '.join(command)
+                   '--vectors_file', self.embeds_fpath+'.txt']
+        params = join_list(sorted(self.config.items()))
         # Print parameters as header to evaluation output file
-        subprocess.run('echo', command_str, '>', self.eval_fpath)
-        subprocess.run('echo', "=========", '>>', self.eval_fpath)
-        self.run_command(command, EVAL)
+        with open(self.eval_fpath, 'w') as f_out:
+            f_out.write(params + '\n')
+            f_out.write('==========\n')
+            self.run_command(lst_el2str(command), name=EVAL, stdout=f_out)
 
     def pre_process(self):
         self.build_vocab()
@@ -170,19 +170,24 @@ class GloVe:
         self.train()
 
 
+def lst_el2str(lst):
+    return [str(el) for el in lst]
+
+
+def join_list(lst, sep=' '):
+    return sep.join(lst_el2str(lst))
+
+
 def get_args(args=None):     # Add possibility to manually insert args at runtime (e.g. for ipynb)
 
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    # parser.add_argument('-n', '--num-epochs', type=int,  # default=110,
-    #                     help='Number of epochs for training.')
+    parser.add_argument('-c', '--corpus_fpath', default='data/data.txt',
+                        help='Training dataset.')
 
-    # parser.add_argument('-c', '--corpora', choices=['se2', 'se3', 'se2_se3'], default='se3',
-    #                     help='Training dataset.')
-
-    # parser.add_argument('-i', '--info', default='',
-    #                     help='Extra info used to describe the current model.')
+    parser.add_argument('-i', '--data-info', default='',
+                        help='Extra info used to describe and sort the current model.')
 
     parser.add_argument('-e', '--eval', action='store_true',
                         help='Perform the evaluation test.')
@@ -208,20 +213,20 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
 
 def main(argp):
 
-    glove = GloVe(1)
+    glove = GloVe(argp, num=1)
 
     if argp.pre_process:
-        print("** PRE-PROCESSING **")
+        print("\n** PRE-PROCESSING **\n")
         glove.pre_process()
     elif argp.train:
-        print("** TRAIN MODEL **")
+        print("\n** TRAIN MODEL **\n")
         glove.train()
     elif argp.full_train:
-        print("** PRE-PROCESS & TRAIN MODEL **")
+        print("\n** PRE-PROCESS & TRAIN MODEL **\n")
         glove.full_train()
 
     if argp.eval:
-        print("** EVALUATE MODEL **")
+        print("\n** EVALUATE MODEL **\n")
         glove.eval()
 
 

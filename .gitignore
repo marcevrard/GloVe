@@ -37,3 +37,8 @@ build/*
 
 # OS X stuff
 ._*
+
+# Data paths
+data/
+model/
+eval/
