@@ -28,12 +28,16 @@ import subprocess
 import argparse
 import json
 
+from math import floor, log2
 
-DATA_PATH = 'data'
-MODEL_PATH = 'model'
-BIN_PATH = 'build'
-EVAL_PATH = 'eval'
-SCRIPT_PATH = 'scripts'
+import psutil
+
+
+DATA_PATH = './data'
+MODEL_PATH = './model'
+BIN_PATH = './build'
+EVAL_PATH = './eval/results'
+SCRIPT_PATH = './scripts'
 
 CONF_FNAME = 'config.json'
 VOCAB_FNAME = 'vocab.txt'
@@ -46,7 +50,7 @@ VOCAB_COUNT = os.path.join(BIN_PATH, 'vocab_count')
 COOCCUR = os.path.join(BIN_PATH, 'cooccur')
 SHUFFLE = os.path.join(BIN_PATH, 'shuffle')
 GLOVE = os.path.join(BIN_PATH, 'glove')
-EVAL = os.path.join(SCRIPT_PATH, 'evaluate.py')
+EVAL = './eval/python/evaluate.py'
 
 
 class GloVe:
@@ -59,12 +63,16 @@ class GloVe:
         self.eval_fpath = ''
         self.model_fpaths = ''
         self.all_fpaths = ''
+        self.memory = None
+        self.num_threads = None
 
         self.argp = argp
 
         self.conf_fpath = os.path.join(SCRIPT_PATH, CONF_FNAME)
         self.load_config()
         self.build_paths(num)
+
+        self.set_ressources()   # TODO: handle manual change in argp and simultaneous process
 
     def load_config(self):
         with open(self.conf_fpath) as f:
@@ -94,6 +102,10 @@ class GloVe:
         if num is not None:
             model_params += [('num', num)]
 
+        os.makedirs(DATA_PATH, exist_ok=True)
+        os.makedirs(MODEL_PATH, exist_ok=True)
+        os.makedirs(EVAL_PATH, exist_ok=True)
+
         self.embeds_fpath = self.get_fpath(MODEL_PATH, EMBEDS_FNAME, model_params)
         self.vocab_fpath = self.get_fpath(DATA_PATH, VOCAB_FNAME, vocab_params)
         self.cooccur_fpath = self.get_fpath(DATA_PATH, COOCCURR_FNAME, data_params)
@@ -103,6 +115,11 @@ class GloVe:
         # self.model_fpaths = [self.embeds_bin_fpath, self.embeds_txt_fpath]
         # self.all_fpaths = self.model_fpaths + \
         #     [self.vocab_fpath, self.cooccur_fpath, self.shuf_cooc_fpath, self.eval_fpath]
+
+    def set_ressources(self):
+        available_memory = psutil.virtual_memory().available / 1024**3
+        self.memory = 2**floor(log2(available_memory))
+        self.num_threads = os.cpu_count()
 
     @staticmethod
     def run_command(command, name=None, stdin=None, stdout=None):
@@ -117,29 +134,29 @@ class GloVe:
                    '-min-count', self.config['voc_min_cnt'],
                    '-verbose', self.config['verbose']]
         with open(self.argp.corpus_fpath, 'r') as f_in, open(self.vocab_fpath, 'w') as f_out:
-            self.run_command(lst_el2str(command), stdin=f_in, stdout=f_out)
+            self.run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
     def build_cooccurr(self):
         command = [COOCCUR,
-                   '-memory', self.config['memory'],
+                   '-memory', self.memory,
                    '-vocab', self.vocab_fpath,
                    '-verbose', self.config['verbose'],
                    '-window-size', self.config['win_size']]
         with open(self.argp.corpus_fpath) as f_in, open(self.cooccur_fpath, 'w') as f_out:
-            self.run_command(lst_el2str(command), stdin=f_in, stdout=f_out)
+            self.run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
     def build_shuf_cooc(self):
         command = [SHUFFLE,
-                   '-memory', self.config['memory'],
+                   '-memory', self.memory,
                    '-verbose', self.config['verbose'],
                    '-window-size', self.config['win_size']]
         with open(self.cooccur_fpath) as f_in, open(self.shuf_cooc_fpath, 'w') as f_out:
-            self.run_command(lst_el2str(command), stdin=f_in, stdout=f_out)
+            self.run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
     def train(self):
         command = [GLOVE,
                    '-save-file', self.embeds_fpath,
-                   '-threads', self.config['num_threads'],
+                   '-threads', self.num_threads,
                    '-input-file', self.shuf_cooc_fpath,
                    '-x-max', self.config['x_max'],
                    '-iter', self.config['max_iter'],
@@ -147,7 +164,7 @@ class GloVe:
                    '-binary', self.config['binary'],
                    '-vocab-file', self.vocab_fpath,
                    '-verbose', self.config['verbose']]
-        self.run_command(lst_el2str(command))
+        self.run_command(lst2str_lst(command))
 
     def eval(self):
         command = ['python', EVAL,
@@ -158,7 +175,8 @@ class GloVe:
         with open(self.eval_fpath, 'w') as f_out:
             f_out.write(params + '\n')
             f_out.write('==========\n')
-            self.run_command(lst_el2str(command), name=EVAL, stdout=f_out)
+        with open(self.eval_fpath, 'a') as f_out:
+            self.run_command(lst2str_lst(command), name=EVAL, stdout=f_out)
 
     def pre_process(self):
         self.build_vocab()
@@ -170,12 +188,12 @@ class GloVe:
         self.train()
 
 
-def lst_el2str(lst):
+def lst2str_lst(lst):
     return [str(el) for el in lst]
 
 
 def join_list(lst, sep=' '):
-    return sep.join(lst_el2str(lst))
+    return sep.join(lst2str_lst(lst))
 
 
 def get_args(args=None):     # Add possibility to manually insert args at runtime (e.g. for ipynb)
