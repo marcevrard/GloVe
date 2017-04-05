@@ -1,0 +1,13 @@
+{
+    "corpus_fpath": "../word2vec_data/data_no_unk_tag.txt",
+
+    "verbose": 2,
+    "memory": 16.0,
+    "voc_min_cnt": 100,
+    "embeds_dim": 100,
+    "max_iter": 50,
+    "win_size": 10,
+    "binary": 2,
+    "num_threads": 56,
+    "x_max": 100
+}
