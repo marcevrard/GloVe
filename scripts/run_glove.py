@@ -8,7 +8,8 @@ Synopsis
 --------
     examples:
     `````````
-        python scripts/run_glove.py -e -c ../word2vec_data/data_no_unk_tag.txt
+        python scripts/run_glove.py -te \
+            --corpus-fpath ../word2vec_data/data_no_unk_tag.txt
 
 Authors
 -------
@@ -59,6 +60,7 @@ class GloVe:
         self.cooccur_fpath = ''
         self.shuf_cooc_fpath = ''
         self.eval_fpath = ''
+
         self.corpus_fpath = ''
 
         self.memory = None
@@ -67,7 +69,12 @@ class GloVe:
         self.argp = argp
 
         self.load_config()
-        self.build_paths(num)
+        self.build_param_tagged_paths(num)
+
+        if argp.corpus_fpath:
+            self.corpus_fpath = argp.corpus_fpath
+        else:
+            self.corpus_fpath = os.path.join(DATA_PATH, self.config['corpus_fname'])
 
         self.set_ressources()   # TODO: handle manual change in argp and simultaneous process
 
@@ -91,7 +98,7 @@ class GloVe:
     #         subprocess.run('rm', fpath)
     #     print("Cleaning of {} done.".format(fpaths))
 
-    def build_paths(self, num=None):
+    def build_param_tagged_paths(self, num=None):
 
         vocab_params = [(self.argp.corpus,),
                         ('cnt', self.config['voc_min_cnt'])]
@@ -111,8 +118,6 @@ class GloVe:
         self.cooccur_fpath = self.get_param_tagged_fpath(DATA_PATH, COOCCURR_FNAME, data_params)
         self.shuf_cooc_fpath = self.get_param_tagged_fpath(DATA_PATH, SHUF_COOC_FNAME, data_params)
         self.eval_fpath = self.get_param_tagged_fpath(EVAL_PATH, EVAL_FNAME, model_params)
-
-        self.corpus_fpath = os.path.join(DATA_PATH, self.config['corpus_fname'])
 
         # self.model_fpaths = [self.embeds_bin_fpath, self.embeds_txt_fpath]
         # self.all_fpaths = self.model_fpaths + \
@@ -216,7 +221,10 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument('-c', '--corpus', choices=['big', 'toy'], default='big',
-                        help='Training dataset.')
+                        help='Training dataset name.')
+
+    parser.add_argument('--corpus-fpath',
+                        help='Training dataset filepath.')
 
     parser.add_argument('-i', '--data-info', default='',
                         help='Extra info used to describe and sort the current model.')
