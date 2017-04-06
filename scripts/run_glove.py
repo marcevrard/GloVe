@@ -58,7 +58,7 @@ EVAL = './eval/python/evaluate.py'
 
 
 class GloVe:
-    def __init__(self, argp, num=None):
+    def __init__(self, argp, num_jobs=None, job_idx=None):
         self.config = {}
         self.embeds_fpath = ''
         self.vocab_fpath = ''
@@ -78,7 +78,7 @@ class GloVe:
         self.argp = argp
 
         self._load_config()
-        self._build_param_tag_paths(num)
+        self._build_param_tag_paths(job_idx)
 
         if argp.corpus_fpath:
             self.corpus_fpath = argp.corpus_fpath
@@ -107,7 +107,7 @@ class GloVe:
     #         subprocess.run('rm', fpath)
     #     print("Cleaning of {} done.".format(fpaths))
 
-    def _build_param_tag_paths(self, num=None):
+    def _build_param_tag_paths(self, job_idx=None):
 
         vocab_params = [(self.argp.corpus,),
                         ('cnt', self.config['voc_min_cnt'])]
@@ -115,8 +115,8 @@ class GloVe:
         model_params = data_params + [('dim', self.config['embeds_dim']),
                                       ('itr', self.config['max_iter']),
                                       ('xmx', self.config['x_max'])]
-        if num is not None:
-            model_params += [('num', num)]
+        if job_idx is not None:
+            model_params += [('num', job_idx)]
 
         os.makedirs(DATA_PATH, exist_ok=True)
         os.makedirs(MODEL_PATH, exist_ok=True)
@@ -291,6 +291,9 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
     parser.add_argument('--corpus-fpath',
                         help='Training dataset filepath.')
 
+    parser.add_argument('-n', '--num-jobs', type=int, default=1,
+                        help='Perform multiple training pass in parallel.')
+
     parser.add_argument('-i', '--data-info', default='',
                         help='Extra info used to describe and sort the current model.')
 
@@ -318,9 +321,9 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
     return argp
 
 
-def main(argp):
+def full_process(argp, num_jobs=None, job_idx=None):
 
-    glove = GloVe(argp, num=1)
+    glove = GloVe(argp, num_jobs, job_idx)
 
     if argp.pre_process:
         print("\n** PRE-PROCESSING **\n")
@@ -339,6 +342,15 @@ def main(argp):
     if argp.analysis:
         glove.setup_cooccurr_analysis()
         embed()
+
+
+def main(argp):
+
+    if argp.num_jobs > 1:   # TODO: apply multiple jobs only to training or name all files!
+        for job_idx in range(argp.num_jobs):
+            full_process(argp, num_jobs=argp.num_jobs, job_idx=job_idx+1)
+    else:
+        full_process(argp)
 
 
 if __name__ == '__main__':
