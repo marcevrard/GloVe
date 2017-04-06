@@ -26,10 +26,15 @@ import os
 import subprocess
 import argparse
 import json
+import struct
 
 from math import floor, log2
 
+import numpy as np
+import pandas as pd
 import psutil
+from IPython import embed  # , start_ipython
+from IPython.display import display
 
 
 DATA_PATH = './data'
@@ -65,11 +70,15 @@ class GloVe:
 
         self.memory = None
         self.num_threads = None
+        self.cooccurrences = []
+        self.id2word = []
+        self.cooccurr_dic = {}
+        self.cooccurrences_df = None
 
         self.argp = argp
 
-        self.load_config()
-        self.build_param_tagged_paths(num)
+        self._load_config()
+        self._build_param_tag_paths(num)
 
         if argp.corpus_fpath:
             self.corpus_fpath = argp.corpus_fpath
@@ -78,14 +87,14 @@ class GloVe:
 
         self.set_ressources()   # TODO: handle manual change in argp and simultaneous process
 
-    def load_config(self):
-        conf_fpath = self.get_param_tagged_fpath(SCRIPT_PATH, CONF_FNAME, [self.argp.corpus])
+    def _load_config(self):
+        conf_fpath = self._get_param_tag_fpath(SCRIPT_PATH, CONF_FNAME, [self.argp.corpus])
         print("Config file used:", conf_fpath)
         with open(conf_fpath) as f:
             self.config = json.load(f)
 
     @staticmethod
-    def get_param_tagged_fpath(path, fname, params):
+    def _get_param_tag_fpath(path, fname, params):
         assert not isinstance(params, str)
         suffix = '_'.join([join_list(param_pair, sep='') for param_pair in params])
         (basename, ext) = os.path.splitext(fname)
@@ -98,7 +107,7 @@ class GloVe:
     #         subprocess.run('rm', fpath)
     #     print("Cleaning of {} done.".format(fpaths))
 
-    def build_param_tagged_paths(self, num=None):
+    def _build_param_tag_paths(self, num=None):
 
         vocab_params = [(self.argp.corpus,),
                         ('cnt', self.config['voc_min_cnt'])]
@@ -113,22 +122,25 @@ class GloVe:
         os.makedirs(MODEL_PATH, exist_ok=True)
         os.makedirs(EVAL_PATH, exist_ok=True)
 
-        self.embeds_fpath = self.get_param_tagged_fpath(MODEL_PATH, EMBEDS_FNAME, model_params)
-        self.vocab_fpath = self.get_param_tagged_fpath(DATA_PATH, VOCAB_FNAME, vocab_params)
-        self.cooccur_fpath = self.get_param_tagged_fpath(DATA_PATH, COOCCURR_FNAME, data_params)
-        self.shuf_cooc_fpath = self.get_param_tagged_fpath(DATA_PATH, SHUF_COOC_FNAME, data_params)
-        self.eval_fpath = self.get_param_tagged_fpath(EVAL_PATH, EVAL_FNAME, model_params)
+        self.embeds_fpath = self._get_param_tag_fpath(MODEL_PATH, EMBEDS_FNAME, model_params)
+        self.vocab_fpath = self._get_param_tag_fpath(DATA_PATH, VOCAB_FNAME, vocab_params)
+        self.cooccur_fpath = self._get_param_tag_fpath(DATA_PATH, COOCCURR_FNAME, data_params)
+        self.shuf_cooc_fpath = self._get_param_tag_fpath(DATA_PATH, SHUF_COOC_FNAME, data_params)
+        self.eval_fpath = self._get_param_tag_fpath(EVAL_PATH, EVAL_FNAME, model_params)
 
         # self.model_fpaths = [self.embeds_bin_fpath, self.embeds_txt_fpath]
         # self.all_fpaths = self.model_fpaths + \
         #     [self.vocab_fpath, self.cooccur_fpath, self.shuf_cooc_fpath, self.eval_fpath]
 
-    def set_ressources(self):
-        available_memory = psutil.virtual_memory().available / 1024**3
-        self.memory = 2**floor(log2(available_memory))
-        self.num_threads = os.cpu_count()
+    def set_ressources(self, num_threads=None, memory=None, num_jobs=1):
+        if memory is None:
+            memory = psutil.virtual_memory().available / 1024**3
+        if num_threads is None:
+            num_threads = os.cpu_count()
+        self.memory = 2**floor(log2(memory / num_jobs))
+        self.num_threads = num_threads / num_jobs
 
-    def fix_vocab(self):
+    def _fix_vocab(self):
         '''Remove missing word (space char) in the vocab file.'''
         with open(self.vocab_fpath) as f:
             vocab = [l.rstrip('\n').split(' ') for l in f]
@@ -139,7 +151,7 @@ class GloVe:
                 f.writelines('{} {}\n'.format(word, cnt) for (word, cnt) in vocab_cln)
 
     @staticmethod
-    def run_command(command, name=None, stdin=None, stdout=None):
+    def _run_command(command, name=None, stdin=None, stdout=None):
         print(join_list(command))
         subprocess.run(command, stdin=stdin, stdout=stdout)
         if name is None:
@@ -151,9 +163,9 @@ class GloVe:
                    '-min-count', self.config['voc_min_cnt'],
                    '-verbose', self.config['verbose']]
         with open(self.corpus_fpath, 'r') as f_in, open(self.vocab_fpath, 'w') as f_out:
-            self.run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
+            self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
         # Remove missing word (space char) in the vocab file.
-        self.fix_vocab()
+        self._fix_vocab()
 
     def build_cooccurr(self):
         command = [COOCCUR,
@@ -162,7 +174,7 @@ class GloVe:
                    '-verbose', self.config['verbose'],
                    '-window-size', self.config['win_size']]
         with open(self.corpus_fpath) as f_in, open(self.cooccur_fpath, 'w') as f_out:
-            self.run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
+            self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
     def build_shuf_cooc(self):
         command = [SHUFFLE,
@@ -170,7 +182,7 @@ class GloVe:
                    '-verbose', self.config['verbose'],
                    '-window-size', self.config['win_size']]
         with open(self.cooccur_fpath) as f_in, open(self.shuf_cooc_fpath, 'w') as f_out:
-            self.run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
+            self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
     def train(self):
         command = [GLOVE,
@@ -183,9 +195,9 @@ class GloVe:
                    '-binary', self.config['binary'],
                    '-vocab-file', self.vocab_fpath,
                    '-verbose', self.config['verbose']]
-        self.run_command(lst2str_lst(command))
+        self._run_command(lst2str_lst(command))
 
-    def eval(self):
+    def sim_eval(self):
         command = ['python', EVAL,
                    '--vocab_file', self.vocab_fpath,
                    '--vectors_file', self.embeds_fpath+'.txt']
@@ -195,7 +207,7 @@ class GloVe:
             f_out.write(params + '\n')
             f_out.write('==========\n')
         with open(self.eval_fpath, 'a') as f_out:
-            self.run_command(lst2str_lst(command), name=EVAL, stdout=f_out)
+            self._run_command(lst2str_lst(command), name=EVAL, stdout=f_out)
 
     def pre_process(self):
         self.build_vocab()
@@ -205,6 +217,59 @@ class GloVe:
     def full_train(self):
         self.pre_process()
         self.train()
+
+    def read_cooccurrences(self):
+        struct_fmt = 'iid'  # int, int, double
+        struct_len = struct.calcsize(struct_fmt)
+        struct_unpack = struct.Struct(struct_fmt).unpack_from
+        def read_chunks(f, length):
+            while True:
+                data = f.read(length)
+                if not data:
+                    break
+                yield data
+        with open(os.path.join(self.cooccur_fpath), 'rb') as f:
+            self.cooccurrences = [struct_unpack(chunk) for chunk in read_chunks(f, struct_len)]
+
+    def _set_id2word(self):
+        with open(os.path.join(self.vocab_fpath)) as f:
+            self.id2word = [l.rstrip().split()[0] for l in f]
+
+    def _set_cooccurr_dic(self):
+        self.cooccurr_dic = {tuple([self.id2word[w_id - 1] for w_id in word_ids]): cnt
+                             for (*word_ids, cnt) in self.cooccurrences}
+
+    def get_cooccurrence_btwn(self, wrd1, wrd2):
+        return self.cooccurr_dic.get((wrd1, wrd2))
+
+    def get_cooccurrences(self, word):
+        return [{word_pair: self.cooccurr_dic[word_pair]}
+                for word_pair in self.cooccurr_dic
+                if word == word_pair[0]]
+
+    def _set_cooccurrences_df(self):
+        '''Display cooccurrence matrix using Pandas.'''
+        cooccurrences_df = pd.DataFrame(self.cooccurrences, columns=['w1', 'w2', 'count'])
+        cooccurrences_df = cooccurrences_df.pivot_table(index='w1', columns='w2')['count']
+        del cooccurrences_df.index.name, cooccurrences_df.columns.name
+        cooccurrences_df = cooccurrences_df.fillna(0)
+                                        # Remove inferior triangle (sym mtrx)
+        cooccurrences_df = pd.DataFrame(np.triu(cooccurrences_df.as_matrix()))
+        cooccurrences_df.columns, cooccurrences_df.index = self.id2word, self.id2word
+        cooccurrences_df[cooccurrences_df == 0] = ''
+        self.cooccurrences_df = cooccurrences_df
+
+    def setup_cooccurr_analysis(self):
+        self.read_cooccurrences()
+        self._set_id2word()
+        self._set_cooccurr_dic()
+        self._set_cooccurrences_df()
+
+    def display_cooccurrence(self):
+        with pd.option_context('max_rows', 20,
+                               'display.float_format', '{:,.1f}'.format,
+                               'display.max_colwidth', 3):
+            display(self.cooccurrences_df)
 
 
 def lst2str_lst(lst):
@@ -240,6 +305,8 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
                        help='Train the models.')
     group.add_argument('-f', '--full-train', action='store_true',
                        help='Pre-process and train the models.')
+    group.add_argument('-a', '--analysis', action='store_true',
+                       help='Start analysis interactive mode.')
     # group.add_argument('-e', '--eval', dest='model_fname',
     #                    help='Perform the evaluation test based on the model given as argument.')
 
@@ -267,7 +334,11 @@ def main(argp):
 
     if argp.eval:
         print("\n** EVALUATE MODEL **\n")
-        glove.eval()
+        glove.sim_eval()
+
+    if argp.analysis:
+        glove.setup_cooccurr_analysis()
+        embed()
 
 
 if __name__ == '__main__':
