@@ -1,9 +1,10 @@
 {
+    "corpus_fname": "data.txt",
     "verbose": 2,
-    "voc_min_cnt": 1,
-    "embeds_dim": 100,
-    "max_iter": 50,
-    "win_size": 10,
+    "voc_min_cnt": 5,
+    "embeds_dim": 50,
+    "max_iter": 15,
+    "win_size": 15,
     "binary": 2,
-    "x_max": 1
+    "x_max": 10
 }

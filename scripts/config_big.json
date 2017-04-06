@@ -1,0 +1,10 @@
+{
+    "corpus_fname": "data_no_unk_tag.txt",
+    "verbose": 2,
+    "voc_min_cnt": 100,
+    "embeds_dim": 100,
+    "max_iter": 50,
+    "win_size": 10,
+    "binary": 2,
+    "x_max": 100
+}

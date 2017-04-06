@@ -8,9 +8,7 @@ Synopsis
 --------
     examples:
     `````````
-        python wsd_bd_lstm.py -n 100 -t -s glove_npy -i norm -c se2 -l 0.4
-        python wsd_bd_lstm.py -n 200 -t -s w2v_c -w big_11_words -i drop_wrd_25 -l 0.4
-        python wsd_bd_lstm.py -n 200 -e -s w2v_c -w big_11_words -i drop_wrd_25 -l 0.4
+        python scripts/run_glove.py -e -c ../word2vec_data/data_no_unk_tag.txt
 
 Authors
 -------
@@ -61,25 +59,26 @@ class GloVe:
         self.cooccur_fpath = ''
         self.shuf_cooc_fpath = ''
         self.eval_fpath = ''
-        self.model_fpaths = ''
-        self.all_fpaths = ''
+        self.corpus_fpath = ''
+
         self.memory = None
         self.num_threads = None
 
         self.argp = argp
 
-        self.conf_fpath = os.path.join(SCRIPT_PATH, CONF_FNAME)
         self.load_config()
         self.build_paths(num)
 
         self.set_ressources()   # TODO: handle manual change in argp and simultaneous process
 
     def load_config(self):
-        with open(self.conf_fpath) as f:
+        conf_fpath = self.get_param_tagged_fpath(SCRIPT_PATH, CONF_FNAME, [self.argp.corpus])
+        print("Config file used:", conf_fpath)
+        with open(conf_fpath) as f:
             self.config = json.load(f)
 
     @staticmethod
-    def get_fpath(path, fname, params):
+    def get_param_tagged_fpath(path, fname, params):
         assert not isinstance(params, str)
         suffix = '_'.join([join_list(param_pair, sep='') for param_pair in params])
         (basename, ext) = os.path.splitext(fname)
@@ -94,7 +93,8 @@ class GloVe:
 
     def build_paths(self, num=None):
 
-        vocab_params = [('cnt', self.config['voc_min_cnt'])]
+        vocab_params = [(self.argp.corpus,),
+                        ('cnt', self.config['voc_min_cnt'])]
         data_params = vocab_params + [('win', self.config['win_size'])]
         model_params = data_params + [('dim', self.config['embeds_dim']),
                                       ('itr', self.config['max_iter']),
@@ -106,11 +106,13 @@ class GloVe:
         os.makedirs(MODEL_PATH, exist_ok=True)
         os.makedirs(EVAL_PATH, exist_ok=True)
 
-        self.embeds_fpath = self.get_fpath(MODEL_PATH, EMBEDS_FNAME, model_params)
-        self.vocab_fpath = self.get_fpath(DATA_PATH, VOCAB_FNAME, vocab_params)
-        self.cooccur_fpath = self.get_fpath(DATA_PATH, COOCCURR_FNAME, data_params)
-        self.shuf_cooc_fpath = self.get_fpath(DATA_PATH, SHUF_COOC_FNAME, data_params)
-        self.eval_fpath = self.get_fpath(EVAL_PATH, EVAL_FNAME, model_params)
+        self.embeds_fpath = self.get_param_tagged_fpath(MODEL_PATH, EMBEDS_FNAME, model_params)
+        self.vocab_fpath = self.get_param_tagged_fpath(DATA_PATH, VOCAB_FNAME, vocab_params)
+        self.cooccur_fpath = self.get_param_tagged_fpath(DATA_PATH, COOCCURR_FNAME, data_params)
+        self.shuf_cooc_fpath = self.get_param_tagged_fpath(DATA_PATH, SHUF_COOC_FNAME, data_params)
+        self.eval_fpath = self.get_param_tagged_fpath(EVAL_PATH, EVAL_FNAME, model_params)
+
+        self.corpus_fpath = os.path.join(DATA_PATH, self.config['corpus_fname'])
 
         # self.model_fpaths = [self.embeds_bin_fpath, self.embeds_txt_fpath]
         # self.all_fpaths = self.model_fpaths + \
@@ -120,6 +122,16 @@ class GloVe:
         available_memory = psutil.virtual_memory().available / 1024**3
         self.memory = 2**floor(log2(available_memory))
         self.num_threads = os.cpu_count()
+
+    def fix_vocab(self):
+        '''Remove missing word (space char) in the vocab file.'''
+        with open(self.vocab_fpath) as f:
+            vocab = [l.rstrip('\n').split(' ') for l in f]
+        vocab_cln = [(word, cnt) for (word, cnt) in vocab if word != '']
+        if len(vocab_cln) != len(vocab):
+            print("{} word(s) removed from the vocab!".format(len(vocab) - len(vocab_cln)))
+            with open(self.vocab_fpath) as f:
+                f.writelines('{} {}\n'.format(word, cnt) for (word, cnt) in vocab_cln)
 
     @staticmethod
     def run_command(command, name=None, stdin=None, stdout=None):
@@ -133,16 +145,18 @@ class GloVe:
         command = [VOCAB_COUNT,
                    '-min-count', self.config['voc_min_cnt'],
                    '-verbose', self.config['verbose']]
-        with open(self.argp.corpus_fpath, 'r') as f_in, open(self.vocab_fpath, 'w') as f_out:
+        with open(self.corpus_fpath, 'r') as f_in, open(self.vocab_fpath, 'w') as f_out:
             self.run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
+        # Remove missing word (space char) in the vocab file.
+        self.fix_vocab()
 
     def build_cooccurr(self):
         command = [COOCCUR,
                    '-memory', self.memory,
-                   '-vocab', self.vocab_fpath,
+                   '-vocab-file', self.vocab_fpath,
                    '-verbose', self.config['verbose'],
                    '-window-size', self.config['win_size']]
-        with open(self.argp.corpus_fpath) as f_in, open(self.cooccur_fpath, 'w') as f_out:
+        with open(self.corpus_fpath) as f_in, open(self.cooccur_fpath, 'w') as f_out:
             self.run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
     def build_shuf_cooc(self):
@@ -201,7 +215,7 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('-c', '--corpus_fpath', default='data/data.txt',
+    parser.add_argument('-c', '--corpus', choices=['big', 'toy'], default='big',
                         help='Training dataset.')
 
     parser.add_argument('-i', '--data-info', default='',

@@ -1,0 +1,10 @@
+{
+    "corpus_fname": "data_toy.txt",
+    "verbose": 2,
+    "voc_min_cnt": 1,
+    "embeds_dim": 3,
+    "max_iter": 5,
+    "win_size": 2,
+    "binary": 2,
+    "x_max": 10
+}
