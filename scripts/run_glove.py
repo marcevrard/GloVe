@@ -135,7 +135,7 @@ class GloVe:
         vocab_cln = [(word, cnt) for (word, cnt) in vocab if word != '']
         if len(vocab_cln) != len(vocab):
             print("{} word(s) removed from the vocab!".format(len(vocab) - len(vocab_cln)))
-            with open(self.vocab_fpath) as f:
+            with open(self.vocab_fpath, 'w') as f:
                 f.writelines('{} {}\n'.format(word, cnt) for (word, cnt) in vocab_cln)
 
     @staticmethod
