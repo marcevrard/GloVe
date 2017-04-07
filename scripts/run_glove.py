@@ -58,7 +58,7 @@ EVAL = './eval/python/evaluate.py'
 
 
 class GloVe:
-    def __init__(self, argp, num_jobs=None, job_idx=None):
+    def __init__(self, argp, job_idx=None):
         self.config = {}
         self.embeds_fbasepath = ''
         self.vocab_fpath = ''
@@ -128,13 +128,16 @@ class GloVe:
         self.cooccur_fpath = self._get_param_tag_fpath(DATA_PATH, COOCCURR_FNAME, data_params)
         self.shuf_cooc_fpath = self._get_param_tag_fpath(DATA_PATH, SHUF_COOC_FNAME, data_params)
         self.embeds_fbasepath = self._get_param_tag_fpath(MODEL_PATH, EMBEDS_FNAME, model_params)
-        self.eval_fpath = self._get_param_tag_fpath(EVAL_PATH, EVAL_FNAME, model_params)
+        # self.eval_fpath = self._get_param_tag_fpath(EVAL_PATH, EVAL_FNAME, model_params)
 
         # TODO: make change for all files. Make next task taking in_fname into account
         #       e.g.: shuf_cooc*_num1.bin >> num1 is detected by train()
         self.embeds_fbasepath = increment_idx_existing_fname(self.embeds_fbasepath+'.txt',
-                                                             idx_name).rstrip('.txt')
-        self.eval_fpath = increment_idx_existing_fname(self.eval_fpath, idx_name)
+                                                             idx_name)[:-len('.txt')]
+        # self.eval_fpath = increment_idx_existing_fname(self.eval_fpath, idx_name)
+        self.eval_fpath = os.path.join(     # TODO: remove this temp fix with global solution
+            EVAL_PATH,
+            'eval' + os.path.split(self.embeds_fbasepath)[1][len(EMBEDS_FNAME):] + '.txt')
 
         # self.model_fpaths = [self.embeds_bin_fpath, self.embeds_txt_fpath]
         # self.all_fpaths = self.model_fpaths + \
@@ -241,7 +244,7 @@ class GloVe:
 
     def _set_id2word(self):
         with open(os.path.join(self.vocab_fpath)) as f:
-            self.id2word = [l.rstrip().split()[0] for l in f]
+            self.id2word = [l.rstrip('\n').split(' ')[0] for l in f]
 
     def _set_cooccurr_dic(self):
         self.cooccurr_dic = {tuple([self.id2word[w_id - 1] for w_id in word_ids]): cnt
@@ -294,7 +297,7 @@ def increment_idx_existing_fname(fpath, idx_name):  # TODO: mv fct in ext module
         (basename, ext) = os.path.splitext(fname)
         bname_splits = basename.split('_')
         if idx_name in bname_splits[-1]:
-            idx = int(bname_splits[-1].lstrip(idx_name))
+            idx = int(bname_splits[-1][len(idx_name):])
             new_fname = '_'.join(bname_splits[:-1] + [idx_name + str(idx + 1)])
         else:
             new_fname = '_'.join(bname_splits + [idx_name + '1'])
@@ -344,9 +347,9 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
     return argp
 
 
-def full_process(argp, num_jobs=None, job_idx=None):
+def full_process(argp, job_idx=None):
 
-    glove = GloVe(argp, num_jobs, job_idx)
+    glove = GloVe(argp, job_idx)
 
     if argp.pre_process:
         print("\n** PRE-PROCESSING **\n")
@@ -369,9 +372,10 @@ def full_process(argp, num_jobs=None, job_idx=None):
 
 def main(argp):
 
-    if argp.num_jobs > 1:   # TODO: apply multiple jobs only to training or name all files!
+    # TODO: allow to use different parameters per job
+    if argp.num_jobs > 1:
         for job_idx in range(argp.num_jobs):
-            full_process(argp, num_jobs=argp.num_jobs, job_idx=job_idx+1)
+            full_process(argp, job_idx=job_idx+1)
     else:
         full_process(argp)
 
