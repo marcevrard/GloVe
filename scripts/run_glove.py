@@ -71,7 +71,9 @@ class GloVe:
         self.memory = None
         self.num_threads = None
         self.cooccurrences = []
+        self.id2word_cooc = []
         self.id2word = []
+        self.embeds = []
         self.cooccurr_dic = {}
         self.cooccurrences_df = None
 
@@ -242,12 +244,12 @@ class GloVe:
         with open(os.path.join(self.cooccur_fpath), 'rb') as f:
             self.cooccurrences = [struct_unpack(chunk) for chunk in read_chunks(f, struct_len)]
 
-    def _set_id2word(self):
+    def _set_id2word_cooc(self):
         with open(os.path.join(self.vocab_fpath)) as f:
-            self.id2word = [l.rstrip('\n').split(' ')[0] for l in f]
+            self.id2word_cooc = [l.rstrip('\n').split(' ')[0] for l in f]
 
     def _set_cooccurr_dic(self):
-        self.cooccurr_dic = {tuple([self.id2word[w_id - 1] for w_id in word_ids]): cnt
+        self.cooccurr_dic = {tuple([self.id2word_cooc[w_id - 1] for w_id in word_ids]): cnt
                              for (*word_ids, cnt) in self.cooccurrences}
 
     def get_cooccurrence_btwn(self, wrd1, wrd2):
@@ -266,13 +268,13 @@ class GloVe:
         cooccurrences_df = cooccurrences_df.fillna(0)
                                         # Remove inferior triangle (sym mtrx)
         cooccurrences_df = pd.DataFrame(np.triu(cooccurrences_df.as_matrix()))
-        cooccurrences_df.columns, cooccurrences_df.index = self.id2word, self.id2word
+        cooccurrences_df.columns, cooccurrences_df.index = self.id2word_cooc, self.id2word_cooc
         cooccurrences_df[cooccurrences_df == 0] = ''
         self.cooccurrences_df = cooccurrences_df
 
     def setup_cooccurr_analysis(self):
         self.read_cooccurrences()
-        self._set_id2word()
+        self._set_id2word_cooc()
         self._set_cooccurr_dic()
         self._set_cooccurrences_df()
 
@@ -281,6 +283,27 @@ class GloVe:
                                'display.float_format', '{:,.1f}'.format,
                                'display.max_colwidth', 3):
             display(self.cooccurrences_df)
+
+    def import_embeds(self):
+        embeds, id2word = [], []
+        with open(self.embeds_fbasepath + '.txt') as f:
+            for idx, l in enumerate(f):
+                word, *vec = l.rstrip('\n').split(' ')
+                id2word.append(word)
+                try:
+                    embeds.append([float(el) for el in vec])
+                except ValueError:
+                    print("**ERROR!**:", idx, word, len(vec), vec, sep='\n')
+
+        self.id2word = id2word
+        self.embeds = np.array(embeds, dtype=np.float32)    # pylint: disable=no-member
+
+    def export_embeds(self):
+        with open(self.embeds_fbasepath + '_voc.txt', 'w') as f:
+            for word in self.id2word:
+                f.write(word + '\n')
+        np.save(self.embeds_fbasepath, self.embeds)
+        print("Mean | STD:", np.mean(self.embeds), '|', np.std(self.embeds))
 
 
 def lst2str_lst(lst):
@@ -310,24 +333,20 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
 
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-
     parser.add_argument('-c', '--corpus', choices=['big', 'toy'], default='big',
                         help='Training dataset name.')
-
     parser.add_argument('--corpus-fpath',
                         help='Training dataset filepath.')
-
     parser.add_argument('-j', '--num-jobs', type=int, default=1,
                         help='Set the number of successive jobs.')
-
     parser.add_argument('-i', '--data-info', default='',
                         help='Extra info used to describe and sort the current model.')
-
     parser.add_argument('-e', '--eval', action='store_true',
                         help='Perform the evaluation test.')
+    parser.add_argument('-x', '--export-embeds', action='store_true',
+                        help='Export embeddings and vocabulary to file.')
 
     group = parser.add_mutually_exclusive_group(required=True)
-
     group.add_argument('-p', '--pre-process', action='store_true',
                        help='Train the models.')
     group.add_argument('-t', '--train', action='store_true',
@@ -368,6 +387,10 @@ def full_process(argp, job_idx=None):
     if argp.analysis:
         glove.setup_cooccurr_analysis()
         embed()
+
+    if argp.export_embeds:
+        glove.import_embeds()
+        glove.export_embeds()
 
 
 def main(argp):
