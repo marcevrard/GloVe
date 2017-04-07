@@ -317,8 +317,8 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
     parser.add_argument('--corpus-fpath',
                         help='Training dataset filepath.')
 
-    parser.add_argument('-n', '--num-jobs', type=int, default=1,
-                        help='Perform multiple training pass in parallel.')
+    parser.add_argument('-j', '--num-jobs', type=int, default=1,
+                        help='Set the number of successive jobs.')
 
     parser.add_argument('-i', '--data-info', default='',
                         help='Extra info used to describe and sort the current model.')
