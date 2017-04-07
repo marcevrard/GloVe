@@ -60,7 +60,7 @@ EVAL = './eval/python/evaluate.py'
 class GloVe:
     def __init__(self, argp, num_jobs=None, job_idx=None):
         self.config = {}
-        self.embeds_fpath = ''
+        self.embeds_fbasepath = ''
         self.vocab_fpath = ''
         self.cooccur_fpath = ''
         self.shuf_cooc_fpath = ''
@@ -109,6 +109,8 @@ class GloVe:
 
     def _build_param_tag_paths(self, job_idx=None):
 
+        idx_name = 'num'
+
         vocab_params = [(self.argp.corpus,),
                         ('cnt', self.config['voc_min_cnt'])]
         data_params = vocab_params + [('win', self.config['win_size'])]
@@ -116,17 +118,23 @@ class GloVe:
                                       ('itr', self.config['max_iter']),
                                       ('xmx', self.config['x_max'])]
         if job_idx is not None:
-            model_params += [('num', job_idx)]
+            model_params += [(idx_name, job_idx)]
 
         os.makedirs(DATA_PATH, exist_ok=True)
         os.makedirs(MODEL_PATH, exist_ok=True)
         os.makedirs(EVAL_PATH, exist_ok=True)
 
-        self.embeds_fpath = self._get_param_tag_fpath(MODEL_PATH, EMBEDS_FNAME, model_params)
         self.vocab_fpath = self._get_param_tag_fpath(DATA_PATH, VOCAB_FNAME, vocab_params)
         self.cooccur_fpath = self._get_param_tag_fpath(DATA_PATH, COOCCURR_FNAME, data_params)
         self.shuf_cooc_fpath = self._get_param_tag_fpath(DATA_PATH, SHUF_COOC_FNAME, data_params)
+        self.embeds_fbasepath = self._get_param_tag_fpath(MODEL_PATH, EMBEDS_FNAME, model_params)
         self.eval_fpath = self._get_param_tag_fpath(EVAL_PATH, EVAL_FNAME, model_params)
+
+        # TODO: make change for all files. Make next task taking in_fname into account
+        #       e.g.: shuf_cooc*_num1.bin >> num1 is detected by train()
+        self.embeds_fbasepath = increment_idx_existing_fname(self.embeds_fbasepath+'.txt',
+                                                             idx_name).rstrip('.txt')
+        self.eval_fpath = increment_idx_existing_fname(self.eval_fpath, idx_name)
 
         # self.model_fpaths = [self.embeds_bin_fpath, self.embeds_txt_fpath]
         # self.all_fpaths = self.model_fpaths + \
@@ -186,7 +194,7 @@ class GloVe:
 
     def train(self):
         command = [GLOVE,
-                   '-save-file', self.embeds_fpath,
+                   '-save-file', self.embeds_fbasepath,
                    '-threads', self.num_threads,
                    '-input-file', self.shuf_cooc_fpath,
                    '-x-max', self.config['x_max'],
@@ -200,7 +208,7 @@ class GloVe:
     def sim_eval(self):
         command = ['python', EVAL,
                    '--vocab_file', self.vocab_fpath,
-                   '--vectors_file', self.embeds_fpath+'.txt']
+                   '--vectors_file', self.embeds_fbasepath+'.txt']
         params = join_list(sorted(self.config.items()))
         # Print parameters as header to evaluation output file
         with open(self.eval_fpath, 'w') as f_out:
@@ -278,6 +286,21 @@ def lst2str_lst(lst):
 
 def join_list(lst, sep=' '):
     return sep.join(lst2str_lst(lst))
+
+
+def increment_idx_existing_fname(fpath, idx_name):  # TODO: mv fct in ext module (to incl in repo)
+    if os.path.isfile(fpath):
+        path, fname = os.path.split(fpath)
+        (basename, ext) = os.path.splitext(fname)
+        bname_splits = basename.split('_')
+        if idx_name in bname_splits[-1]:
+            idx = int(bname_splits[-1].lstrip(idx_name))
+            new_fname = '_'.join(bname_splits[:-1] + [idx_name + str(idx + 1)])
+        else:
+            new_fname = '_'.join(bname_splits + [idx_name + '1'])
+        new_fpath = os.path.join(path, new_fname + ext)
+        return increment_idx_existing_fname(new_fpath, idx_name)
+    return fpath
 
 
 def get_args(args=None):     # Add possibility to manually insert args at runtime (e.g. for ipynb)
