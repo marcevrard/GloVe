@@ -8,8 +8,7 @@ Synopsis
 --------
     examples:
     `````````
-        python scripts/run_glove.py -te \
-            --corpus-fpath ../word2vec_data/data_no_unk_tag.txt
+        ./scripts/run_glove.py -texj 3 --corpus-fpath ../word2vec_data/data_no_unk_tag.txt
 
 Authors
 -------
