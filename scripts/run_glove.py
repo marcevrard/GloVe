@@ -57,7 +57,7 @@ GLOVE = os.path.join(BIN_PATH, 'glove')
 EVAL = './eval/python/evaluate.py'
 
 
-class GloVe:
+class Option:
     def __init__(self, argp, job_idx=None):
         self.config = {}
         self.embeds_fbasepath = ''
@@ -70,22 +70,24 @@ class GloVe:
 
         self.memory = None
         self.num_threads = None
-        self.cooccurrences = []
-        self.id2word_cooc = []
-        self.id2word = []
-        self.embeds = []
-        self.cooccurr_dic = {}
-        self.cooccurrences_df = None
 
         self.argp = argp
 
-        self._load_config()
+        self.config = self._load_config()
+
+        (self.corpus_fname, self.verbose, self.voc_min_cnt, self.embeds_dim, self.max_iter,
+         self.win_size, self.binary, self.x_max) = (None,) * 8
+
+        for (key, value) in self.config.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
         self._build_param_tag_paths(job_idx)
 
         if argp.corpus_fpath:
             self.corpus_fpath = argp.corpus_fpath
         else:
-            self.corpus_fpath = os.path.join(DATA_PATH, self.config['corpus_fname'])
+            self.corpus_fpath = os.path.join(DATA_PATH, self.corpus_fname)
 
         self.set_ressources()   # TODO: handle manual change in argp and simultaneous process
 
@@ -93,7 +95,7 @@ class GloVe:
         conf_fpath = self._get_param_tag_fpath(SCRIPT_PATH, CONF_FNAME, [self.argp.corpus])
         print("Config file used:", conf_fpath)
         with open(conf_fpath) as f:
-            self.config = json.load(f)
+            return json.load(f)
 
     @staticmethod
     def _get_param_tag_fpath(path, fname, params):
@@ -114,11 +116,11 @@ class GloVe:
         idx_name = 'num'
 
         vocab_params = [(self.argp.corpus,),
-                        ('cnt', self.config['voc_min_cnt'])]
-        data_params = vocab_params + [('win', self.config['win_size'])]
-        model_params = data_params + [('dim', self.config['embeds_dim']),
-                                      ('itr', self.config['max_iter']),
-                                      ('xmx', self.config['x_max'])]
+                        ('cnt', self.voc_min_cnt)]
+        data_params = vocab_params + [('win', self.win_size)]
+        model_params = data_params + [('dim', self.embeds_dim),
+                                      ('itr', self.max_iter),
+                                      ('xmx', self.x_max)]
         if job_idx is not None:
             model_params += [(idx_name, job_idx)]
 
@@ -153,14 +155,19 @@ class GloVe:
         self.memory = 2**floor(log2(memory / num_jobs))
         self.num_threads = num_threads / num_jobs
 
+
+class GloVe:
+    def __init__(self, opts):
+        self.opts = opts
+
     def _fix_vocab(self):
         '''Remove missing word (space char) in the vocab file.'''
-        with open(self.vocab_fpath) as f:
+        with open(self.opts.vocab_fpath) as f:
             vocab = [l.rstrip('\n').split(' ') for l in f]
         vocab_cln = [(word, cnt) for (word, cnt) in vocab if word != '']
         if len(vocab_cln) != len(vocab):
             print("{} word(s) removed from the vocab!".format(len(vocab) - len(vocab_cln)))
-            with open(self.vocab_fpath, 'w') as f:
+            with open(self.opts.vocab_fpath, 'w') as f:
                 f.writelines('{} {}\n'.format(word, cnt) for (word, cnt) in vocab_cln)
 
     @staticmethod
@@ -173,53 +180,53 @@ class GloVe:
 
     def build_vocab(self):
         command = [VOCAB_COUNT,
-                   '-min-count', self.config['voc_min_cnt'],
-                   '-verbose', self.config['verbose']]
-        with open(self.corpus_fpath, 'r') as f_in, open(self.vocab_fpath, 'w') as f_out:
+                   '-min-count', self.opts.voc_min_cnt,
+                   '-verbose', self.opts.verbose]
+        with open(self.opts.corpus_fpath, 'r') as f_in, open(self.opts.vocab_fpath, 'w') as f_out:
             self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
         # Remove missing word (space char) in the vocab file.
         self._fix_vocab()
 
     def build_cooccurr(self):
         command = [COOCCUR,
-                   '-memory', self.memory,
-                   '-vocab-file', self.vocab_fpath,
-                   '-verbose', self.config['verbose'],
-                   '-window-size', self.config['win_size']]
-        with open(self.corpus_fpath) as f_in, open(self.cooccur_fpath, 'w') as f_out:
+                   '-memory', self.opts.memory,
+                   '-vocab-file', self.opts.vocab_fpath,
+                   '-verbose', self.opts.verbose,
+                   '-window-size', self.opts.win_size]
+        with open(self.opts.corpus_fpath) as f_in, open(self.opts.cooccur_fpath, 'w') as f_out:
             self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
     def build_shuf_cooc(self):
         command = [SHUFFLE,
-                   '-memory', self.memory,
-                   '-verbose', self.config['verbose'],
-                   '-window-size', self.config['win_size']]
-        with open(self.cooccur_fpath) as f_in, open(self.shuf_cooc_fpath, 'w') as f_out:
+                   '-memory', self.opts.memory,
+                   '-verbose', self.opts.verbose,
+                   '-window-size', self.opts.win_size]
+        with open(self.opts.cooccur_fpath) as f_in, open(self.opts.shuf_cooc_fpath, 'w') as f_out:
             self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
     def train(self):
         command = [GLOVE,
-                   '-save-file', self.embeds_fbasepath,
-                   '-threads', self.num_threads,
-                   '-input-file', self.shuf_cooc_fpath,
-                   '-x-max', self.config['x_max'],
-                   '-iter', self.config['max_iter'],
-                   '-vector-size', self.config['embeds_dim'],
-                   '-binary', self.config['binary'],
-                   '-vocab-file', self.vocab_fpath,
-                   '-verbose', self.config['verbose']]
+                   '-save-file', self.opts.embeds_fbasepath,
+                   '-threads', self.opts.num_threads,
+                   '-input-file', self.opts.shuf_cooc_fpath,
+                   '-x-max', self.opts.x_max,
+                   '-iter', self.opts.max_iter,
+                   '-vector-size', self.opts.embeds_dim,
+                   '-binary', self.opts.binary,
+                   '-vocab-file', self.opts.vocab_fpath,
+                   '-verbose', self.opts.verbose]
         self._run_command(lst2str_lst(command))
 
     def sim_eval(self):
         command = ['python', EVAL,
-                   '--vocab_file', self.vocab_fpath,
-                   '--vectors_file', self.embeds_fbasepath+'.txt']
-        params = join_list(sorted(self.config.items()))
+                   '--vocab_file', self.opts.vocab_fpath,
+                   '--vectors_file', self.opts.embeds_fbasepath+'.txt']
+        params = join_list(sorted(self.opts.config.items()))
         # Print parameters as header to evaluation output file
-        with open(self.eval_fpath, 'w') as f_out:
+        with open(self.opts.eval_fpath, 'w') as f_out:
             f_out.write(params + '\n')
             f_out.write('==========\n')
-        with open(self.eval_fpath, 'a') as f_out:
+        with open(self.opts.eval_fpath, 'a') as f_out:
             self._run_command(lst2str_lst(command), name=EVAL, stdout=f_out)
 
     def pre_process(self):
@@ -231,6 +238,16 @@ class GloVe:
         self.pre_process()
         self.train()
 
+
+class Analysis:
+    def __init__(self, opts):
+        self.opts = opts
+
+        self.cooccurr_dic = {}
+        self.cooccurrences = []
+        self.cooccurrences_df = None
+        self.id2word_cooc = []
+
     def read_cooccurrences(self):
         struct_fmt = 'iid'  # int, int, double
         struct_len = struct.calcsize(struct_fmt)
@@ -241,11 +258,11 @@ class GloVe:
                 if not data:
                     break
                 yield data
-        with open(os.path.join(self.cooccur_fpath), 'rb') as f:
+        with open(os.path.join(self.opts.cooccur_fpath), 'rb') as f:
             self.cooccurrences = [struct_unpack(chunk) for chunk in read_chunks(f, struct_len)]
 
     def _set_id2word_cooc(self):
-        with open(os.path.join(self.vocab_fpath)) as f:
+        with open(os.path.join(self.opts.vocab_fpath)) as f:
             self.id2word_cooc = [l.rstrip('\n').split(' ')[0] for l in f]
 
     def _set_cooccurr_dic(self):
@@ -284,9 +301,17 @@ class GloVe:
                                'display.max_colwidth', 3):
             display(self.cooccurrences_df)
 
+
+class Export:
+    def __init__(self, opts):
+        self.opts = opts
+
+        self.id2word = []
+        self.embeds = []
+
     def import_embeds(self):
         embeds, id2word = [], []
-        with open(self.embeds_fbasepath + '.txt') as f:
+        with open(self.opts.embeds_fbasepath + '.txt') as f:
             for idx, l in enumerate(f):
                 word, *vec = l.rstrip('\n').split(' ')
                 id2word.append(word)
@@ -299,10 +324,10 @@ class GloVe:
         self.embeds = np.array(embeds, dtype=np.float32)    # pylint: disable=no-member
 
     def export_embeds(self):
-        with open(self.embeds_fbasepath + '_voc.txt', 'w') as f:
+        with open(self.opts.embeds_fbasepath + '_voc.txt', 'w') as f:
             for word in self.id2word:
                 f.write(word + '\n')
-        np.save(self.embeds_fbasepath, self.embeds)
+        np.save(self.opts.embeds_fbasepath, self.embeds)
         print("Mean | STD:", np.mean(self.embeds), '|', np.std(self.embeds))
 
 
@@ -368,7 +393,11 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
 
 def full_process(argp, job_idx=None):
 
-    glove = GloVe(argp, job_idx)
+    options = Option(argp, job_idx)
+
+    glove = GloVe(options)
+    analysis = Analysis(options)
+    export = Export(options)
 
     if argp.pre_process:
         print("\n** PRE-PROCESSING **\n")
@@ -385,12 +414,12 @@ def full_process(argp, job_idx=None):
         glove.sim_eval()
 
     if argp.analysis:
-        glove.setup_cooccurr_analysis()
+        analysis.setup_cooccurr_analysis()
         embed()
 
     if argp.export_embeds:
-        glove.import_embeds()
-        glove.export_embeds()
+        export.import_embeds()
+        export.export_embeds()
 
 
 def main(argp):
@@ -404,4 +433,7 @@ def main(argp):
 
 
 if __name__ == '__main__':
-    main(get_args())
+    try:
+        main(get_args())
+    except KeyboardInterrupt:
+        sys.exit("\nProgram interrupted by user.\n")
