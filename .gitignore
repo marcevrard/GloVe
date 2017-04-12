@@ -43,3 +43,6 @@ data/
 model/
 eval/results/
 Models/
+
+# python
+*.pyc
