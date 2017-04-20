@@ -21,13 +21,12 @@ Licensed under the Apache License, Version 2.0 (the "License"):
 http://www.apache.org/licenses/LICENSE-2.0
 '''
 
-import sys
-import os
-import subprocess
 import argparse
 import json
+import os
 import struct
-
+import subprocess
+import sys
 from math import floor, log2
 
 import numpy as np
@@ -35,7 +34,6 @@ import pandas as pd
 import psutil
 from IPython import embed  # , start_ipython
 from IPython.display import display
-
 
 DATA_PATH = './data'
 MODEL_PATH = './model'
@@ -89,7 +87,7 @@ class Option:
         else:
             self.corpus_fpath = os.path.join(DATA_PATH, self.corpus_fname)
 
-        self.set_ressources()   # TODO: handle manual change in argp and simultaneous process
+        self.set_ressources(argp.num_threads)   # TODO: handle simultaneous process(?)
 
     def _load_config(self):
         conf_fpath = self._get_param_tag_fpath(SCRIPT_PATH, CONF_FNAME, [self.argp.corpus])
@@ -370,6 +368,8 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
                         help='Perform the evaluation test.')
     parser.add_argument('-x', '--export-embeds', action='store_true',
                         help='Export embeddings and vocabulary to file.')
+    parser.add_argument('-l', '--num-threads', type=int,
+                        help='Set the number of CPU threads.')
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-p', '--pre-process', action='store_true',
