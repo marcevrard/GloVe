@@ -1,0 +1,12 @@
+{
+    "data_path": "./data",
+    "model_path": "./model",
+    "bin_path": "./build",
+    "eval_path": "./eval/results",
+    "vocab_fname": "vocab.txt",
+    "cooccurr_fname": "cooccurrence.bin",
+    "shuf_cooc_fname": "shuf_cooccurr.bin",
+    "embeds_fname": "vectors_glove",
+    "eval_fname": "eval.txt",
+    "eval": "./eval/python/evaluate.py"
+}

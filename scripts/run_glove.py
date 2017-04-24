@@ -9,16 +9,11 @@ Synopsis
     examples:
     `````````
         ./scripts/run_glove.py -texj 3 --corpus-fpath ../word2vec_data/data_no_unk_tag.txt
+        ./scripts/run_glove.py -fec toy --corpus-fpath ./data/data_toy.txt
 
 Authors
 -------
 * Marc Evrard         (<marc.evrard@gmail.com>)
-
-License
--------
-Licensed under the Apache License, Version 2.0 (the "License"):
-
-http://www.apache.org/licenses/LICENSE-2.0
 '''
 
 import argparse
@@ -35,24 +30,9 @@ import psutil
 from IPython import embed  # , start_ipython
 from IPython.display import display
 
-DATA_PATH = './data'
-MODEL_PATH = './model'
-BIN_PATH = './build'
-EVAL_PATH = './eval/results'
-SCRIPT_PATH = './scripts'
 
+PATHS_FNAME = 'paths.json'
 CONF_FNAME = 'config.json'
-VOCAB_FNAME = 'vocab.txt'
-COOCCURR_FNAME = 'cooccurrence.bin'
-SHUF_COOC_FNAME = 'shuf_cooccurr.bin'
-EMBEDS_FNAME = 'vectors_glove'
-EVAL_FNAME = 'eval.txt'
-
-VOCAB_COUNT = os.path.join(BIN_PATH, 'vocab_count')
-COOCCUR = os.path.join(BIN_PATH, 'cooccur')
-SHUFFLE = os.path.join(BIN_PATH, 'shuffle')
-GLOVE = os.path.join(BIN_PATH, 'glove')
-EVAL = './eval/python/evaluate.py'
 
 
 class Option:
@@ -71,12 +51,30 @@ class Option:
 
         self.argp = argp
 
-        self.config = self._load_config()
+        self.script_path = os.path.dirname(os.path.realpath(__file__))
+        self.paths = paths = self._load_paths()
+
+        (self.data_path, self.model_path, self.bin_path, self.eval_path, self.vocab_fname,
+         self.cooccurr_fname, self.shuf_cooc_fname, self.embeds_fname, self.eval_fname,
+         self.eval
+        ) = (None,) * 10
+
+        for (key, value) in paths.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
+        self.vocab_count = os.path.join(self.bin_path, 'vocab_count')
+        self.cooccur = os.path.join(self.bin_path, 'cooccur')
+        self.shuffle = os.path.join(self.bin_path, 'shuffle')
+        self.glove = os.path.join(self.bin_path, 'glove')
+
+        self.config = config = self._load_config()
 
         (self.corpus_fname, self.verbose, self.voc_min_cnt, self.embeds_dim, self.max_iter,
-         self.win_size, self.binary, self.x_max) = (None,) * 8
+         self.win_size, self.binary, self.x_max
+        ) = (None,) * 8
 
-        for (key, value) in self.config.items():
+        for (key, value) in config.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
@@ -85,12 +83,16 @@ class Option:
         if argp.corpus_fpath:
             self.corpus_fpath = argp.corpus_fpath
         else:
-            self.corpus_fpath = os.path.join(DATA_PATH, self.corpus_fname)
+            self.corpus_fpath = os.path.join(paths['data_path'], self.corpus_fname)
 
         self.set_ressources(argp.num_threads)   # TODO: handle simultaneous process(?)
 
+    def _load_paths(self):
+        with open(os.path.join(self.script_path, PATHS_FNAME)) as f:
+            return json.load(f)
+
     def _load_config(self):
-        conf_fpath = self._get_param_tag_fpath(SCRIPT_PATH, CONF_FNAME, [self.argp.corpus])
+        conf_fpath = self._get_param_tag_fpath(self.script_path, CONF_FNAME, [self.argp.corpus])
         print("Config file used:", conf_fpath)
         with open(conf_fpath) as f:
             return json.load(f)
@@ -122,15 +124,19 @@ class Option:
         if job_idx is not None:
             model_params += [(idx_name, job_idx)]
 
-        os.makedirs(DATA_PATH, exist_ok=True)
-        os.makedirs(MODEL_PATH, exist_ok=True)
-        os.makedirs(EVAL_PATH, exist_ok=True)
+        os.makedirs(self.data_path, exist_ok=True)
+        os.makedirs(self.model_path, exist_ok=True)
+        os.makedirs(self.eval_path, exist_ok=True)
 
-        self.vocab_fpath = self._get_param_tag_fpath(DATA_PATH, VOCAB_FNAME, vocab_params)
-        self.cooccur_fpath = self._get_param_tag_fpath(DATA_PATH, COOCCURR_FNAME, data_params)
-        self.shuf_cooc_fpath = self._get_param_tag_fpath(DATA_PATH, SHUF_COOC_FNAME, data_params)
-        self.embeds_fbasepath = self._get_param_tag_fpath(MODEL_PATH, EMBEDS_FNAME, model_params)
-        # self.eval_fpath = self._get_param_tag_fpath(EVAL_PATH, EVAL_FNAME, model_params)
+        self.vocab_fpath = self._get_param_tag_fpath(self.data_path, self.vocab_fname,
+                                                     vocab_params)
+        self.cooccur_fpath = self._get_param_tag_fpath(self.data_path, self.cooccurr_fname,
+                                                       data_params)
+        self.shuf_cooc_fpath = self._get_param_tag_fpath(self.data_path, self.shuf_cooc_fname,
+                                                         data_params)
+        self.embeds_fbasepath = self._get_param_tag_fpath(self.model_path, self.embeds_fname,
+                                                          model_params)
+        # self.eval_fpath = self._get_param_tag_fpath(self.eval_path, EVAL_FNAME, model_params)
 
         # TODO: make change for all files. Make next task taking in_fname into account
         #       e.g.: shuf_cooc*_num1.bin >> num1 is detected by train()
@@ -138,8 +144,8 @@ class Option:
                                                              idx_name)[:-len('.txt')]
         # self.eval_fpath = increment_idx_existing_fname(self.eval_fpath, idx_name)
         self.eval_fpath = os.path.join(     # TODO: remove this temp fix with global solution
-            EVAL_PATH,
-            'eval' + os.path.split(self.embeds_fbasepath)[1][len(EMBEDS_FNAME):] + '.txt')
+            self.eval_path,
+            'eval' + os.path.split(self.embeds_fbasepath)[1][len(self.embeds_fname):] + '.txt')
 
         # self.model_fpaths = [self.embeds_bin_fpath, self.embeds_txt_fpath]
         # self.all_fpaths = self.model_fpaths + \
@@ -177,7 +183,7 @@ class GloVe:
         print("'{}' done.\n".format(name))
 
     def build_vocab(self):
-        command = [VOCAB_COUNT,
+        command = [self.opts.vocab_count,
                    '-min-count', self.opts.voc_min_cnt,
                    '-verbose', self.opts.verbose]
         with open(self.opts.corpus_fpath, 'r') as f_in, open(self.opts.vocab_fpath, 'w') as f_out:
@@ -186,7 +192,7 @@ class GloVe:
         self._fix_vocab()
 
     def build_cooccurr(self):
-        command = [COOCCUR,
+        command = [self.opts.cooccur,
                    '-memory', self.opts.memory,
                    '-vocab-file', self.opts.vocab_fpath,
                    '-verbose', self.opts.verbose,
@@ -195,7 +201,7 @@ class GloVe:
             self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
     def build_shuf_cooc(self):
-        command = [SHUFFLE,
+        command = [self.opts.shuffle,
                    '-memory', self.opts.memory,
                    '-verbose', self.opts.verbose,
                    '-window-size', self.opts.win_size]
@@ -203,7 +209,7 @@ class GloVe:
             self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
     def train(self):
-        command = [GLOVE,
+        command = [self.opts.glove,
                    '-save-file', self.opts.embeds_fbasepath,
                    '-threads', self.opts.num_threads,
                    '-input-file', self.opts.shuf_cooc_fpath,
@@ -216,7 +222,7 @@ class GloVe:
         self._run_command(lst2str_lst(command))
 
     def sim_eval(self):
-        command = ['python', EVAL,
+        command = ['python', self.opts.eval,
                    '--vocab_file', self.opts.vocab_fpath,
                    '--vectors_file', self.opts.embeds_fbasepath+'.txt']
         params = join_list(sorted(self.opts.config.items()))
@@ -225,7 +231,7 @@ class GloVe:
             f_out.write(params + '\n')
             f_out.write('==========\n')
         with open(self.opts.eval_fpath, 'a') as f_out:
-            self._run_command(lst2str_lst(command), name=EVAL, stdout=f_out)
+            self._run_command(lst2str_lst(command), name=self.opts.eval, stdout=f_out)
 
     def pre_process(self):
         self.build_vocab()
@@ -328,6 +334,10 @@ class Export:
         np.save(self.opts.embeds_fbasepath, self.embeds)
         print("Mean | STD:", np.mean(self.embeds), '|', np.std(self.embeds))
 
+    def rm_original_embeds(self):
+        os.remove(self.opts.embeds_fbasepath + '.txt')
+        os.remove(self.opts.embeds_fbasepath + '.bin')
+
 
 def lst2str_lst(lst):
     return [str(el) for el in lst]
@@ -420,6 +430,7 @@ def full_process(argp, job_idx=None):
     if argp.export_embeds:
         export.import_embeds()
         export.export_embeds()
+        export.rm_original_embeds()
 
 
 def main(argp):
