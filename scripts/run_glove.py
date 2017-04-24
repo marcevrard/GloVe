@@ -9,7 +9,7 @@ Synopsis
     examples:
     `````````
         ./scripts/run_glove.py -texj 3 --corpus-fpath ../word2vec_data/data_no_unk_tag.txt
-        ./scripts/run_glove.py -fec toy --corpus-fpath ./data/data_toy.txt
+        ./scripts/run_glove.py -feac toy --corpus-fpath ./data/data_toy.txt
 
 Authors
 -------
@@ -249,6 +249,7 @@ class Analysis:
 
         self.cooccurr_dic = {}
         self.cooccurrences = []
+        self.shuf_cooccurr = []
         self.cooccurrences_df = None
         self.id2word_cooc = []
 
@@ -262,8 +263,10 @@ class Analysis:
                 if not data:
                     break
                 yield data
-        with open(os.path.join(self.opts.cooccur_fpath), 'rb') as f:
+        with open(self.opts.cooccur_fpath, 'rb') as f:
             self.cooccurrences = [struct_unpack(chunk) for chunk in read_chunks(f, struct_len)]
+        with open(self.opts.shuf_cooc_fpath, 'rb') as f:
+            self.shuf_cooccurr = [struct_unpack(chunk) for chunk in read_chunks(f, struct_len)]
 
     def _set_id2word_cooc(self):
         with open(os.path.join(self.opts.vocab_fpath)) as f:
@@ -380,6 +383,8 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
                         help='Export embeddings and vocabulary to file.')
     parser.add_argument('-l', '--num-threads', type=int,
                         help='Set the number of CPU threads.')
+    parser.add_argument('-a', '--analysis', action='store_true',
+                        help='Start analysis interactive mode.')
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-p', '--pre-process', action='store_true',
@@ -388,8 +393,6 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
                        help='Train the models.')
     group.add_argument('-f', '--full-train', action='store_true',
                        help='Pre-process and train the models.')
-    group.add_argument('-a', '--analysis', action='store_true',
-                       help='Start analysis interactive mode.')
     # group.add_argument('-e', '--eval', dest='model_fname',
     #                    help='Perform the evaluation test based on the model given as argument.')
 
