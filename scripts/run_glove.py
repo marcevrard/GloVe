@@ -382,7 +382,7 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
     parser.add_argument('-x', '--export-embeds', action='store_true',
                         help='Export embeddings and vocabulary to file.')
     parser.add_argument('-l', '--num-threads', type=int,
-                        help='Set the number of CPU threads.')
+                        help='Limit the number of CPU threads.')
     parser.add_argument('-a', '--analysis', action='store_true',
                         help='Start analysis interactive mode.')
 
