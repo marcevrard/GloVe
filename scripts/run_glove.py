@@ -43,9 +43,6 @@ class Option:
         self.cooccur_fpath = ''
         self.shuf_cooc_fpath = ''
         self.eval_fpath = ''
-
-        self.corpus_fpath = ''
-
         self.memory = None
         self.num_threads = None
 
@@ -183,56 +180,61 @@ class GloVe:
         print("'{}' done.\n".format(name))
 
     def build_vocab(self):
-        command = [self.opts.vocab_count,
-                   '-min-count', self.opts.voc_min_cnt,
-                   '-verbose', self.opts.verbose]
-        with open(self.opts.corpus_fpath, 'r') as f_in, open(self.opts.vocab_fpath, 'w') as f_out:
+        opts = self.opts
+        command = [opts.vocab_count,
+                   '-min-count', opts.voc_min_cnt,
+                   '-verbose', opts.verbose]
+        with open(opts.corpus_fpath, 'r') as f_in, open(opts.vocab_fpath, 'w') as f_out:
             self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
         # Remove missing word (space char) in the vocab file.
         self._fix_vocab()
 
     def build_cooccurr(self):
+        opts = self.opts
         command = [self.opts.cooccur,
-                   '-memory', self.opts.memory,
-                   '-vocab-file', self.opts.vocab_fpath,
-                   '-verbose', self.opts.verbose,
-                   '-window-size', self.opts.win_size]
-        with open(self.opts.corpus_fpath) as f_in, open(self.opts.cooccur_fpath, 'w') as f_out:
+                   '-memory', opts.memory,
+                   '-vocab-file', opts.vocab_fpath,
+                   '-verbose', opts.verbose,
+                   '-window-size', opts.win_size]
+        with open(opts.corpus_fpath) as f_in, open(opts.cooccur_fpath, 'w') as f_out:
             self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
     def build_shuf_cooc(self):
-        command = [self.opts.shuffle,
-                   '-memory', self.opts.memory,
-                   '-verbose', self.opts.verbose,
-                   '-window-size', self.opts.win_size]
-        with open(self.opts.cooccur_fpath) as f_in, open(self.opts.shuf_cooc_fpath, 'w') as f_out:
+        opts = self.opts
+        command = [opts.shuffle,
+                   '-memory', opts.memory,
+                   '-verbose', opts.verbose,
+                   '-window-size', opts.win_size]
+        with open(opts.cooccur_fpath) as f_in, open(opts.shuf_cooc_fpath, 'w') as f_out:
             self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
-        os.remove(self.opts.cooccur_fpath)
+        os.remove(opts.cooccur_fpath)
 
     def train(self):
-        command = [self.opts.glove,
-                   '-save-file', self.opts.embeds_fbasepath,
-                   '-threads', self.opts.num_threads,
-                   '-input-file', self.opts.shuf_cooc_fpath,
-                   '-x-max', self.opts.x_max,
-                   '-iter', self.opts.max_iter,
-                   '-vector-size', self.opts.embeds_dim,
-                   '-binary', self.opts.binary,
-                   '-vocab-file', self.opts.vocab_fpath,
-                   '-verbose', self.opts.verbose]
+        opts = self.opts
+        command = [opts.glove,
+                   '-save-file', opts.embeds_fbasepath,
+                   '-threads', opts.num_threads,
+                   '-input-file', opts.shuf_cooc_fpath,
+                   '-x-max', opts.x_max,
+                   '-iter', opts.max_iter,
+                   '-vector-size', opts.embeds_dim,
+                   '-binary', opts.binary,
+                   '-vocab-file', opts.vocab_fpath,
+                   '-verbose', opts.verbose]
         self._run_command(lst2str_lst(command))
 
     def sim_eval(self):
-        command = ['python', self.opts.eval,
-                   '--vocab_file', self.opts.vocab_fpath,
-                   '--vectors_file', self.opts.embeds_fbasepath+'.txt']
-        params = join_list(sorted(self.opts.config.items()))
+        opts = self.opts
+        command = ['python', opts.eval,
+                   '--vocab_file', opts.vocab_fpath,
+                   '--vectors_file', opts.embeds_fbasepath+'.txt']
+        params = join_list(sorted(opts.config.items()))
         # Print parameters as header to evaluation output file
-        with open(self.opts.eval_fpath, 'w') as f_out:
+        with open(opts.eval_fpath, 'w') as f_out:
             f_out.write(params + '\n')
             f_out.write('==========\n')
-        with open(self.opts.eval_fpath, 'a') as f_out:
-            self._run_command(lst2str_lst(command), name=self.opts.eval, stdout=f_out)
+        with open(opts.eval_fpath, 'a') as f_out:
+            self._run_command(lst2str_lst(command), name=opts.eval, stdout=f_out)
 
     def pre_process(self):
         self.build_vocab()
@@ -387,7 +389,7 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
     parser.add_argument('-a', '--analysis', action='store_true',
                         help='Start analysis interactive mode.')
 
-    group = parser.add_mutually_exclusive_group(required=True)
+    group = parser.add_mutually_exclusive_group()   # required=True
     group.add_argument('-p', '--pre-process', action='store_true',
                        help='Train the models.')
     group.add_argument('-t', '--train', action='store_true',
