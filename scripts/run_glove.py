@@ -207,6 +207,7 @@ class GloVe:
                    '-window-size', self.opts.win_size]
         with open(self.opts.cooccur_fpath) as f_in, open(self.opts.shuf_cooc_fpath, 'w') as f_out:
             self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
+        os.remove(self.opts.cooccur_fpath)
 
     def train(self):
         command = [self.opts.glove,
