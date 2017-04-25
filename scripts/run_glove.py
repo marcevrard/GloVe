@@ -251,7 +251,6 @@ class Analysis:
         self.opts = opts
 
         self.cooccurr_dic = {}
-        self.cooccurrences = []
         self.shuf_cooccurr = []
         self.cooccurrences_df = None
         self.id2word_cooc = []
@@ -266,8 +265,6 @@ class Analysis:
                 if not data:
                     break
                 yield data
-        with open(self.opts.cooccur_fpath, 'rb') as f:
-            self.cooccurrences = [struct_unpack(chunk) for chunk in read_chunks(f, struct_len)]
         with open(self.opts.shuf_cooc_fpath, 'rb') as f:
             self.shuf_cooccurr = [struct_unpack(chunk) for chunk in read_chunks(f, struct_len)]
 
@@ -277,7 +274,7 @@ class Analysis:
 
     def _set_cooccurr_dic(self):
         self.cooccurr_dic = {tuple([self.id2word_cooc[w_id - 1] for w_id in word_ids]): cnt
-                             for (*word_ids, cnt) in self.cooccurrences}
+                             for (*word_ids, cnt) in self.shuf_cooccurr}
 
     def get_cooccurrence_btwn(self, wrd1, wrd2):
         return self.cooccurr_dic.get((wrd1, wrd2))
@@ -289,7 +286,7 @@ class Analysis:
 
     def _set_cooccurrences_df(self):
         '''Display cooccurrence matrix using Pandas.'''
-        cooccurrences_df = pd.DataFrame(self.cooccurrences, columns=['w1', 'w2', 'count'])
+        cooccurrences_df = pd.DataFrame(self.shuf_cooccurr, columns=['w1', 'w2', 'count'])
         cooccurrences_df = cooccurrences_df.pivot_table(index='w1', columns='w2')['count']
         del cooccurrences_df.index.name, cooccurrences_df.columns.name
         cooccurrences_df = cooccurrences_df.fillna(0)
