@@ -67,7 +67,7 @@ class Option:
 
         self.config = config = self._load_config()
 
-        (self.corpus_fname, self.verbose, self.voc_min_cnt, self.embeds_dim, self.max_iter,
+        (self.corpus_fname, self.verbose, self.min_count, self.embeds_dim, self.max_iter,
          self.win_size, self.binary, self.x_max
         ) = (None,) * 8
 
@@ -83,6 +83,10 @@ class Option:
             self.corpus_fpath = os.path.join(paths['data_path'], self.corpus_fname)
 
         self.set_ressources(argp.num_threads)   # TODO: handle simultaneous process(?)
+
+        os.makedirs(self.data_path, exist_ok=True)
+        os.makedirs(self.model_path, exist_ok=True)
+        os.makedirs(self.eval_path, exist_ok=True)
 
     def _load_paths(self):
         with open(os.path.join(self.script_path, PATHS_FNAME)) as f:
@@ -113,17 +117,13 @@ class Option:
         idx_name = 'num'
 
         vocab_params = [(self.argp.corpus,),
-                        ('cnt', self.voc_min_cnt)]
+                        ('cnt', self.min_count)]
         data_params = vocab_params + [('win', self.win_size)]
         model_params = data_params + [('dim', self.embeds_dim),
                                       ('itr', self.max_iter),
                                       ('xmx', self.x_max)]
         if job_idx is not None:
             model_params += [(idx_name, job_idx)]
-
-        os.makedirs(self.data_path, exist_ok=True)
-        os.makedirs(self.model_path, exist_ok=True)
-        os.makedirs(self.eval_path, exist_ok=True)
 
         self.vocab_fpath = self._get_param_tag_fpath(self.data_path, self.vocab_fname,
                                                      vocab_params)
@@ -182,7 +182,7 @@ class GloVe:
     def build_vocab(self):
         opts = self.opts
         command = [opts.vocab_count,
-                   '-min-count', opts.voc_min_cnt,
+                   '-min-count', opts.min_count,
                    '-verbose', opts.verbose]
         with open(opts.corpus_fpath, 'r') as f_in, open(opts.vocab_fpath, 'w') as f_out:
             self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)

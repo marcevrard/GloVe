@@ -1,7 +1,7 @@
 {
     "corpus_fname": "data.txt",
     "verbose": 2,
-    "voc_min_cnt": 5,
+    "min_count": 5,
     "embeds_dim": 50,
     "max_iter": 15,
     "win_size": 15,
