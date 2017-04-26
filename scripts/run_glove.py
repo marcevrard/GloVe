@@ -34,6 +34,7 @@ from IPython.display import display
 PATHS_FNAME = 'paths.json'
 CONF_FNAME = 'config.json'
 
+# TODO: Create parent classes for wvec and derive this module from them!
 
 class Option:
     def __init__(self, argp, job_idx=None):
@@ -224,6 +225,7 @@ class GloVe:
         self._run_command(lst2str_lst(command))
 
     def sim_eval(self):
+        # TODO: apply same tests in GloVe and W2V
         opts = self.opts
         command = ['python', opts.eval,
                    '--vocab_file', opts.vocab_fpath,
