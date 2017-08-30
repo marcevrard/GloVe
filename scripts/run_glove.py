@@ -14,6 +14,13 @@ Synopsis
 Authors
 -------
 * Marc Evrard         (<marc.evrard@gmail.com>)
+
+License
+-------
+Copyright 2017 Marc Evrard
+
+Licensed under the Apache License, Version 2.0 (the "License")
+http://www.apache.org/licenses/LICENSE-2.0
 '''
 
 import argparse
@@ -29,6 +36,8 @@ import pandas as pd
 import psutil
 from IPython import embed  # , start_ipython
 from IPython.display import display
+
+import embedding_tools as emb
 
 
 PATHS_FNAME = 'paths.json'
@@ -94,7 +103,8 @@ class Option:
             return json.load(f)
 
     def _load_config(self):
-        conf_fpath = self._get_param_tag_fpath(self.script_path, CONF_FNAME, [self.argp.corpus])
+        conf_fpath = self._get_param_tag_fpath(self.script_path, CONF_FNAME,
+                                               [self.argp.corpus_type])
         print("Config file used:", conf_fpath)
         with open(conf_fpath) as f:
             return json.load(f)
@@ -117,7 +127,7 @@ class Option:
 
         idx_name = 'num'
 
-        vocab_params = [(self.argp.corpus,),
+        vocab_params = [(self.argp.corpus_type,),
                         ('cnt', self.min_count)]
         data_params = vocab_params + [('win', self.win_size)]
         model_params = data_params + [('dim', self.embeds_dim),
@@ -311,39 +321,6 @@ class Analysis:
             display(self.cooccurrences_df)
 
 
-class Export:
-    def __init__(self, opts):
-        self.opts = opts
-
-        self.id2word = []
-        self.embeds = []
-
-    def import_embeds(self):
-        embeds, id2word = [], []
-        with open(self.opts.embeds_fbasepath + '.txt') as f:
-            for idx, l in enumerate(f):
-                word, *vec = l.rstrip('\n').split(' ')
-                id2word.append(word)
-                try:
-                    embeds.append([float(el) for el in vec])
-                except ValueError:
-                    print("**ERROR!**:", idx, word, len(vec), vec, sep='\n')
-
-        self.id2word = id2word
-        self.embeds = np.array(embeds, dtype=np.float32)    # pylint: disable=no-member
-
-    def export_embeds(self):
-        with open(self.opts.embeds_fbasepath + '_voc.txt', 'w') as f:
-            for word in self.id2word:
-                f.write(word + '\n')
-        np.save(self.opts.embeds_fbasepath, self.embeds)
-        print("Mean | STD:", np.mean(self.embeds), '|', np.std(self.embeds))
-
-    def rm_original_embeds(self):
-        os.remove(self.opts.embeds_fbasepath + '.txt')
-        os.remove(self.opts.embeds_fbasepath + '.bin')
-
-
 def lst2str_lst(lst):
     return [str(el) for el in lst]
 
@@ -371,7 +348,7 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
 
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('-c', '--corpus', choices=['big', 'toy'], default='big',
+    parser.add_argument('-c', '--corpus-type', choices=['big', 'toy'], default='big',
                         help='Training dataset name.')
     parser.add_argument('--corpus-fpath',
                         help='Training dataset filepath.')
@@ -412,7 +389,6 @@ def full_process(argp, job_idx=None):
 
     glove = GloVe(options)
     analysis = Analysis(options)
-    export = Export(options)
 
     if argp.pre_process:
         print("\n** PRE-PROCESSING **\n")
@@ -433,9 +409,8 @@ def full_process(argp, job_idx=None):
         embed()
 
     if argp.export_embeds:
-        export.import_embeds()
-        export.export_embeds()
-        export.rm_original_embeds()
+        emb.conv_embeds(options.embeds_fbasepath + '.txt')
+        emb.rm_txt_bin_embeds(options.embeds_fbasepath)
 
 
 def main(argp):
