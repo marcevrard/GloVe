@@ -9,7 +9,7 @@ Synopsis
     examples:
     `````````
         ./scripts/run_glove.py -texj 3 --corpus-fpath ../word2vec_data/data_no_unk_tag.txt
-        ./scripts/run_glove.py -feac toy --corpus-fpath ./data/data_toy.txt
+        ./scripts/run_glove.py -feac toy --corpus-fpath ./data_toy/data_toy.txt
 
 Authors
 -------
@@ -185,7 +185,10 @@ class GloVe:
     @staticmethod
     def _run_command(command, name=None, stdin=None, stdout=None):
         print(join_list(command))
-        subprocess.run(command, stdin=stdin, stdout=stdout)
+        try:
+            subprocess.run(command, stdin=stdin, stdout=stdout)
+        except FileNotFoundError:
+            sys.exit("Error! Is GloVe installed? If not: run `make`")
         if name is None:
             name = command[0]
         print("'{}' done.\n".format(name))
