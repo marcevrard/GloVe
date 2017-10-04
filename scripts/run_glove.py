@@ -186,7 +186,7 @@ class GloVe:
     def _run_command(command, name=None, stdin=None, stdout=None):
         print(join_list(command))
         try:
-            subprocess.run(command, stdin=stdin, stdout=stdout)
+            subprocess.run(command, stdin=stdin, stdout=stdout, check=True)
         except FileNotFoundError:
             sys.exit("Error! Is GloVe installed? If not: run `make`")
         if name is None:
