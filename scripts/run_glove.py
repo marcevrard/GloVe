@@ -413,7 +413,7 @@ def full_process(argp, job_idx=None):
 
     if argp.export_embeds:
         emb.conv_embeds(options.embeds_fbasepath + '.txt')
-        emb.rm_txt_bin_embeds(options.embeds_fbasepath)
+        # emb.rm_txt_bin_embeds(options.embeds_fbasepath)
 
 
 def main(argp):
