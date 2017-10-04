@@ -148,8 +148,9 @@ class Option:
 
         # TODO: make change for all files. Make next task taking in_fname into account
         #       e.g.: shuf_cooc*_num1.bin >> num1 is detected by train()
-        self.embeds_fbasepath = increment_idx_existing_fname(self.embeds_fbasepath+'.txt',
-                                                             idx_name)[:-len('.txt')]
+        if self.argp.train or self.argp.full_train:    # only at training time (allow eval only)
+            self.embeds_fbasepath = increment_idx_existing_fname(self.embeds_fbasepath+'.txt',
+                                                                 idx_name)[:-len('.txt')]
         # self.eval_fpath = increment_idx_existing_fname(self.eval_fpath, idx_name)
         self.eval_fpath = os.path.join(     # TODO: remove this temp fix with global solution
             self.eval_path,
