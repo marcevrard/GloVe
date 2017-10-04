@@ -240,7 +240,7 @@ class GloVe:
     def sim_eval(self):
         # TODO: apply same tests in GloVe and W2V
         opts = self.opts
-        command = ['python', opts.eval,
+        command = ['python3', opts.eval,
                    '--vocab_file', opts.vocab_fpath,
                    '--vectors_file', opts.embeds_fbasepath+'.txt']
         params = join_list(sorted(opts.config.items()))
