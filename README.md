@@ -1,5 +1,13 @@
-## GloVe: Global Vectors for Word Representation
+# GloVe: Global Vectors for Word Representation
 
+## This fork: GloVe wrapper
+
+    examples:
+    `````````
+        ./scripts/run_glove.py -texj 3 --corpus-fpath ../word2vec_data/data_no_unk_tag.txt
+        ./scripts/run_glove.py -feac toy --corpus-fpath ./data_toy/data_toy.txt
+
+## Original readme
 
 | nearest neighbors of <br/> <em>frog</em> | Litoria             |  Leptodactylidae | Rana | Eleutherodactylus |
 | --- | ------------------------------- | ------------------- | ---------------- | ------------------- |
