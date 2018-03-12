@@ -6,6 +6,28 @@
     `````````
         ./scripts/run_glove.py -texj 3 --corpus-fpath ../word2vec_data/data_no_unk_tag.txt
         ./scripts/run_glove.py -feac toy --corpus-fpath ./data_toy/data_toy.txt
+    
+    Optional arguments:
+    ```````````````````
+        -h, --help          Show this help message and exit
+        -c {big,toy}, --corpus-type {big,toy}
+                            Training dataset name.
+        --corpus-fpath CORPUS_FPATH
+                            Training dataset filepath.
+        -j NUM_JOBS, --num-jobs NUM_JOBS
+                            Set the number of successive jobs.
+        -i DATA_INFO, --data-info DATA_INFO
+                            Extra info used to describe and sort the current
+                            model.
+        -e, --eval          Perform the evaluation test.
+        -x, --export-embeds Export embeddings and vocabulary to file.
+        -l NUM_THREADS, --num-threads NUM_THREADS
+                            Limit the number of CPU threads.
+        -a, --analysis      Start analysis interactive mode.
+        -p, --pre-process   Train the models.
+        -t, --train         Train the models.
+        -f, --full-train    Pre-process and train the models.
+
 
 ## Original readme
 
