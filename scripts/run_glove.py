@@ -24,8 +24,10 @@ http://www.apache.org/licenses/LICENSE-2.0
 '''
 
 import argparse
+import csv
 import json
 import os
+import random
 import struct
 import subprocess
 import sys
@@ -214,6 +216,16 @@ class GloVe:
         with open(opts.corpus_fpath) as f_in, open(opts.cooccur_fpath, 'w') as f_out:
             self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
+    def import_external_cooccurr(self, edgelist_fname):
+        with open(edgelist_fname) as f:
+            cooccurr = [(int(v_a), int(v_b), float(weight))
+                        for v_a, v_b, weight in csv.reader(f, delimiter=' ')]
+        struct_fmt = 'iid'
+        random.shuffle(cooccurr)
+        with open(self.opts.shuf_cooc_fpath, 'wb') as f:
+            for tpl in cooccurr:
+                f.write(struct.pack(struct_fmt, *tpl))
+
     def build_shuf_cooc(self):
         opts = self.opts
         command = [opts.shuffle,
@@ -368,6 +380,8 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
                         help='Limit the number of CPU threads.')
     parser.add_argument('-a', '--analysis', action='store_true',
                         help='Start analysis interactive mode.')
+    # parser.add_argument('--import-edgelist',
+    #                     help='Start analysis interactive mode.')
 
     group = parser.add_mutually_exclusive_group()   # required=True
     group.add_argument('-p', '--pre-process', action='store_true',
