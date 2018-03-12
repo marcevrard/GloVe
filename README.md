@@ -1,6 +1,6 @@
 # GloVe: Global Vectors for Word Representation
 
-## This fork: GloVe wrapper
+## This fork: Add GloVe wrapper
 
     examples:
     `````````
