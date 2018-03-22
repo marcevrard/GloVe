@@ -24,23 +24,22 @@ http://www.apache.org/licenses/LICENSE-2.0
 '''
 
 import argparse
-import csv
 import json
 import os
 import random
+import shutil
 import struct
 import subprocess
 import sys
 from math import floor, log2
 
-import numpy as np
 import pandas as pd
 import psutil
 from IPython import embed  # , start_ipython
 from IPython.display import display
 
 import embedding_tools as emb
-
+import misc_tools as misc
 
 PATHS_REL_FPATH = 'config/paths.json'
 CONF_REL_FPATH = 'config/config.json'
@@ -107,7 +106,7 @@ class Option:
     def _load_config(self):
         conf_fpath = self._get_param_tag_fpath(self.script_path, CONF_REL_FPATH,
                                                [self.argp.corpus_type])
-        print("Config file used:", conf_fpath)
+        print("Config file used:", os.path.basename(conf_fpath))
         with open(conf_fpath) as f:
             return json.load(f)
 
@@ -216,15 +215,17 @@ class GloVe:
         with open(opts.corpus_fpath) as f_in, open(opts.cooccur_fpath, 'w') as f_out:
             self._run_command(lst2str_lst(command), stdin=f_in, stdout=f_out)
 
-    def import_external_cooccurr(self, edgelist_fname):
-        with open(edgelist_fname) as f:
-            cooccurr = [(int(v_a), int(v_b), float(weight))
-                        for v_a, v_b, weight in csv.reader(f, delimiter=' ')]
+    def import_external_cooccurr(self, edgelist_fpath):
+        cooccurr = [(int(v_a), int(v_b), float(weight))
+                    for v_a, v_b, weight in misc.open_csv(edgelist_fpath)]
         struct_fmt = 'iid'
         random.shuffle(cooccurr)
         with open(self.opts.shuf_cooc_fpath, 'wb') as f:
             for tpl in cooccurr:
-                f.write(struct.pack(struct_fmt, *tpl))
+                f.write(struct.pack(struct_fmt, * tpl))
+
+        fpath, _ext = os.path.splitext(edgelist_fpath)
+        shutil.copyfile(f'{fpath}_voc.txt', self.opts.vocab_fpath)
 
     def build_shuf_cooc(self):
         opts = self.opts
@@ -380,8 +381,8 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
                         help='Limit the number of CPU threads.')
     parser.add_argument('-a', '--analysis', action='store_true',
                         help='Start analysis interactive mode.')
-    # parser.add_argument('--import-edgelist',
-    #                     help='Start analysis interactive mode.')
+    parser.add_argument('--edgelist-fname',
+                        help='Start analysis interactive mode.')
 
     group = parser.add_mutually_exclusive_group()   # required=True
     group.add_argument('-p', '--pre-process', action='store_true',
@@ -395,8 +396,8 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
 
     argp = parser.parse_args(args)
 
-    # if argp.embeds_src == 'w2v_c' and argp.w2vc_name == '' and argp.train:
-    #     parser.error("--embeds-src='w2v_c' requires -w W2VC_NAME.")
+    if argp.corpus_type == 'wn' and argp.edgelist_fname is None:
+        parser.error("--corpus-type='wn' requires --edgelist-fname EDGELIST_FNAME.")
 
     return argp
 
@@ -408,7 +409,11 @@ def full_process(argp, job_idx=None):
     glove = GloVe(options)
     analysis = Analysis(options)
 
-    if argp.pre_process:
+    if argp.corpus_type == 'wn':
+        glove.import_external_cooccurr(argp.edgelist_fname)
+        print("\n** TRAIN WN MODEL **\n")
+        glove.train()
+    elif argp.pre_process:
         print("\n** PRE-PROCESSING **\n")
         glove.pre_process()
     elif argp.train:
