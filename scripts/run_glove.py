@@ -42,8 +42,8 @@ from IPython.display import display
 import embedding_tools as emb
 
 
-PATHS_FNAME = 'paths.json'
-CONF_FNAME = 'config.json'
+PATHS_REL_FPATH = 'config/paths.json'
+CONF_REL_FPATH = 'config/config.json'
 
 # TODO: Create parent classes for wvec and derive this module from them!
 
@@ -101,11 +101,11 @@ class Option:
         os.makedirs(self.eval_path, exist_ok=True)
 
     def _load_paths(self):
-        with open(os.path.join(self.script_path, PATHS_FNAME)) as f:
+        with open(os.path.join(self.script_path, PATHS_REL_FPATH)) as f:
             return json.load(f)
 
     def _load_config(self):
-        conf_fpath = self._get_param_tag_fpath(self.script_path, CONF_FNAME,
+        conf_fpath = self._get_param_tag_fpath(self.script_path, CONF_REL_FPATH,
                                                [self.argp.corpus_type])
         print("Config file used:", conf_fpath)
         with open(conf_fpath) as f:
@@ -116,7 +116,7 @@ class Option:
         assert not isinstance(params, str)
         suffix = '_'.join([join_list(param_pair, sep='') for param_pair in params])
         (basename, ext) = os.path.splitext(fname)
-        new_basename = '{}_{}{}'.format(basename, suffix, ext)
+        new_basename = f'{basename}_{suffix}{ext}'
         return os.path.join(path, new_basename)
 
     # def clean_old(self, fpaths):
@@ -319,7 +319,7 @@ class Analysis:
         del cooccurrences_df.index.name, cooccurrences_df.columns.name
         cooccurrences_df = cooccurrences_df.fillna(0)
                                         # Remove inferior triangle (sym mtrx)
-        cooccurrences_df = pd.DataFrame(np.triu(cooccurrences_df.as_matrix()))
+        # cooccurrences_df = pd.DataFrame(np.triu(cooccurrences_df.as_matrix()))
         cooccurrences_df.columns, cooccurrences_df.index = self.id2word_cooc, self.id2word_cooc
         cooccurrences_df[cooccurrences_df == 0] = ''
         self.cooccurrences_df = cooccurrences_df
@@ -364,7 +364,7 @@ def get_args(args=None):     # Add possibility to manually insert args at runtim
 
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('-c', '--corpus-type', choices=['big', 'toy'], default='big',
+    parser.add_argument('-c', '--corpus-type', choices=['big', 'toy', 'wn'], default='big',
                         help='Training dataset name.')
     parser.add_argument('--corpus-fpath',
                         help='Training dataset filepath.')
