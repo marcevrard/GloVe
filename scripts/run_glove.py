@@ -10,6 +10,7 @@ Synopsis
     `````````
         ./scripts/run_glove.py -texj 3 --corpus-fpath ../word2vec_data/data_no_unk_tag.txt
         ./scripts/run_glove.py -feac toy --corpus-fpath ./data_toy/data_toy.txt
+        ./scripts/run_glove.py -xc wn --edgelist-fname data/sem_sign_full_edgelist_glove.bz2
 
 Authors
 -------
@@ -77,6 +78,7 @@ class Option:
         self.glove = os.path.join(self.bin_path, 'glove')
 
         self.config = config = self._load_config()
+        print(config)
 
         (self.corpus_fname, self.verbose, self.min_count, self.embeds_dim, self.max_iter,
          self.win_size, self.binary, self.x_max
@@ -220,7 +222,7 @@ class GloVe:
                     for v_a, v_b, weight in misc.open_csv(edgelist_fpath)]
         struct_fmt = 'iid'
         random.shuffle(cooccurr)
-        with open(self.opts.shuf_cooc_fpath, 'wb') as f:
+        with open(self.opts.cooccur_fpath, 'wb') as f:
             for tpl in cooccurr:
                 f.write(struct.pack(struct_fmt, * tpl))
 
@@ -410,7 +412,9 @@ def full_process(argp, job_idx=None):
     analysis = Analysis(options)
 
     if argp.corpus_type == 'wn':
+        print("\n** PRE-PROCESS WN MODEL **\n")
         glove.import_external_cooccurr(argp.edgelist_fname)
+        glove.build_shuf_cooc()
         print("\n** TRAIN WN MODEL **\n")
         glove.train()
     elif argp.pre_process:
