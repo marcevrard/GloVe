@@ -29,7 +29,6 @@ import json
 import os
 import random
 import shutil
-import struct
 import subprocess
 import sys
 from math import floor, log2
@@ -220,11 +219,10 @@ class GloVe:
     def import_external_cooccurr(self, edgelist_fpath):
         cooccurr = [(int(v_a), int(v_b), float(weight))
                     for v_a, v_b, weight in misc.open_csv(edgelist_fpath)]
-        struct_fmt = 'iid'
+
         random.shuffle(cooccurr)
-        with open(self.opts.cooccur_fpath, 'wb') as f:
-            for tpl in cooccurr:
-                f.write(struct.pack(struct_fmt, * tpl))
+
+        misc.write_bin_file(self.opts.cooccur_fpath, cooccurr, struct_fmt='2id')
 
         fpath, _ext = os.path.splitext(edgelist_fpath)
         shutil.copyfile(f'{fpath}_voc.txt', self.opts.vocab_fpath)
