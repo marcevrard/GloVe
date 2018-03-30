@@ -287,17 +287,9 @@ class Analysis:
         self.id2word_cooc = []
 
     def read_cooccurrences(self):
-        struct_fmt = 'iid'  # int, int, double
-        struct_len = struct.calcsize(struct_fmt)
-        struct_unpack = struct.Struct(struct_fmt).unpack_from
-        def read_chunks(f, length):
-            while True:
-                data = f.read(length)
-                if not data:
-                    break
-                yield data
-        with open(self.opts.shuf_cooc_fpath, 'rb') as f:
-            self.shuf_cooccurr = [struct_unpack(chunk) for chunk in read_chunks(f, struct_len)]
+        self.shuf_cooccurr = [row for row in misc.read_bin_file(self.opts.shuf_cooc_fpath,
+                                                                struct_fmt='2id')]
+                                                                # int, int, double
 
     def _set_id2word_cooc(self):
         with open(os.path.join(self.opts.vocab_fpath)) as f:
@@ -320,11 +312,11 @@ class Analysis:
         cooccurrences_df = pd.DataFrame(self.shuf_cooccurr, columns=['w1', 'w2', 'count'])
         cooccurrences_df = cooccurrences_df.pivot_table(index='w1', columns='w2')['count']
         del cooccurrences_df.index.name, cooccurrences_df.columns.name
-        cooccurrences_df = cooccurrences_df.fillna(0)
+        # cooccurrences_df = cooccurrences_df.fillna(0)
                                         # Remove inferior triangle (sym mtrx)
         # cooccurrences_df = pd.DataFrame(np.triu(cooccurrences_df.as_matrix()))
         cooccurrences_df.columns, cooccurrences_df.index = self.id2word_cooc, self.id2word_cooc
-        cooccurrences_df[cooccurrences_df == 0] = ''
+        # cooccurrences_df[cooccurrences_df == 0] = ''
         self.cooccurrences_df = cooccurrences_df
 
     def setup_cooccurr_analysis(self):
@@ -338,7 +330,6 @@ class Analysis:
                                'display.float_format', '{:,.1f}'.format,
                                'display.max_colwidth', 3):
             display(self.cooccurrences_df)
-
 
 def lst2str_lst(lst):
     return [str(el) for el in lst]
